@@ -13,7 +13,7 @@ export default function PdfPreviewPage() {
   return (
     <div className="min-h-screen">
       <header className="bg-white shadow-sm px-4 sm:px-8 py-4 flex items-center justify-between gap-4 print:hidden">
-        <Link href="/verification" className="text-[#3bbfbf] text-sm hover:underline">← Back</Link>
+        <Link href="/verification" className="flex items-center gap-1 px-4 py-2 rounded-lg border border-[#3bbfbf] text-[#3bbfbf] text-sm font-medium hover:bg-[#e8f7f7] transition-colors">← Back</Link>
         <h1 className="text-lg font-semibold text-gray-800">PDF Preview</h1>
         <button onClick={() => window.print()} className={`text-sm font-semibold px-5 py-2 rounded-lg transition-colors ${btnClass}`}>
           Print / Save PDF
@@ -28,8 +28,7 @@ export default function PdfPreviewPage() {
 
         {/* Spread 2 */}
         <div className="flex flex-col sm:flex-row mt-6 print:mt-0 w-full max-w-[900px] mx-auto rounded-2xl overflow-hidden shadow-lg print:shadow-none print:page-break-before-always">
-          <PagePhoto babyImage={babyImage} />
-          <PageStory form={form} accentHex={accentHex} />
+          <PageStory form={form} accentHex={accentHex} storyImage={babyImage} />
         </div>
       </div>
     </div>
@@ -68,7 +67,9 @@ function PageInside({ form, accentHex }: { form: StoryForm; accentHex: string })
       <div
         className="relative z-10 mt-10 w-[72%] rounded-[20px] border border-white/70 px-8 py-7"
         style={{
-          background: "linear-gradient(135deg, rgba(210,235,238,0.95) 0%, rgba(190,222,228,0.92) 100%)",
+          background: accentHex === "#f472b6"
+            ? "linear-gradient(135deg, rgba(251,207,232,0.95) 0%, rgba(244,171,200,0.92) 100%)"
+            : "linear-gradient(135deg, rgba(210,235,238,0.95) 0%, rgba(190,222,228,0.92) 100%)",
           boxShadow: "0 4px 18px rgba(0,0,0,0.06)",
         }}
       >
@@ -134,95 +135,119 @@ function PageInside({ form, accentHex }: { form: StoryForm; accentHex: string })
   );
 }
 
-/* ─── Photo page ─── */
-function PagePhoto({ babyImage }: { babyImage: string | null }) {
+/* ─── Story text page — Full A4 portrait layout ─── */
+function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex: string; storyImage: string | null }) {
   return (
     <div
-      className="relative overflow-hidden bg-white"
-      style={{ width: "210mm", height: "297mm", maxWidth: "100%" }}
+      className="relative overflow-hidden flex"
+      style={{ width: "210mm", height: "297mm", background: accentHex === "#f472b6" ? "#f5c6e0" : "#d7eef0" }}
     >
-      <Image src={babyImage || "/Frame 1.png"} alt="Baby" fill className="object-contain" />
-    </div>
-  );
-}
-
-/* ─── Story text page ─── */
-function PageStory({ form, accentHex }: { form: StoryForm; accentHex: string }) {
-  return (
-    <div
-      className="flex flex-col gap-4 text-sm leading-relaxed text-gray-800 p-8 overflow-hidden"
-      style={{
-        background: "linear-gradient(135deg, #e8f7f7 0%, #f0fafa 60%, #d6eeee 100%)",
-        width: "210mm",
-        height: "297mm",
-        maxWidth: "100%",
-      }}
-    >
-      <StorySection title="The First Cry">
-        <p>
-          Your mother,{" "}
-          <span className="font-semibold" style={{ color: accentHex }}>{form.motherName || "your mother"}</span>,
-          had tears of joy in her eyes when she heard your very first cry
-          {form.birthDate && (
-            <> on <span className="font-semibold" style={{ color: accentHex }}>{form.birthDate}{form.birthTime && " at " + form.birthTime}</span></>
-          )}.
-          That beautiful moment marked the beginning of your journey.
-        </p>
-      </StorySection>
-
-      <StorySection title="Welcomed With Love">
-        <p>
-          You were delivered at Ovum Hospitals
-          {form.hospital && <>, <span className="font-semibold" style={{ color: accentHex }}>{form.hospital}</span></>},
-          surrounded by love and care.
-        </p>
-        {form.doctors.length > 0 && (
-          <p className="mt-1">
-            Your mother&apos;s trusted doctors,{" "}
-            <span className="font-semibold" style={{ color: accentHex }}>{form.doctors.join(", ")}</span>, stood beside her
-            {form.fatherName && <> along with your father, <span className="font-semibold" style={{ color: accentHex }}>{form.fatherName}</span></>}.
-          </p>
+      {/* Left image section */}
+      <div className="relative flex items-center justify-center bg-white/30" style={{ width: "52%", height: "100%" }}>
+        {storyImage ? (
+          <Image
+            src={storyImage}
+            alt="Birth Story"
+            fill
+            priority
+            className="object-contain"
+            sizes="100vw"
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-3">
+            <Image src="/icon.png" alt="No image" width={72} height={72} className="object-contain opacity-30" />
+            <p className="text-sm text-gray-400">No photo uploaded</p>
+          </div>
         )}
-        {form.nurse.length > 0 && (
-          <p className="mt-1">
-            <span className="font-semibold" style={{ color: accentHex }}>{form.nurse.join(", ")}</span> and the nursing team cared for you with warmth and devotion.
-          </p>
-        )}
-      </StorySection>
+      </div>
 
-      <StorySection title="A Father's First Hold">
-        <p>Wrapped gently in soft cloth, you were placed into your father&apos;s arms for the very first time.</p>
-      </StorySection>
+      {/* Divider */}
+      <div className="w-[1px] bg-[#5e6b6b]" />
 
-      {form.roomType && (
-        <StorySection title="A Room Filled With Happiness">
-          <p>
-            To celebrate your arrival, you were welcomed into the{" "}
-            <span className="font-semibold" style={{ color: accentHex }}>{form.roomType}</span> chosen lovingly by your mother.
-          </p>
-          {form.checkInDate && (
-            <p className="mt-1">
-              <span className="font-semibold" style={{ color: accentHex }}>
-                On {form.checkInDate}{form.checkInTime && " at " + form.checkInTime}
-              </span>, your family settled in for a beautiful stay.
+      {/* Right story section */}
+      <div className="flex-1 px-10 py-8 overflow-hidden" style={{ background: accentHex === "#f472b6" ? "#f9d0e8" : "#c7e4e7" }}>
+        <div className="space-y-8 text-[14px] leading-[1.4] text-[#111]">
+
+          <div>
+            <h3 className="font-bold mb-1">The First Cry</h3>
+            <p>
+              Your mother,{" "}
+              <span className="font-semibold" style={{ color: accentHex }}>{form.motherName || "your mother"}</span>,
+              had tears of joy in her eyes when she heard your very first cry on{" "}
+              {form.birthDate && (
+                <span className="font-semibold" style={{ color: accentHex }}>
+                  {form.birthDate}{form.birthTime && ` at ${form.birthTime}`}
+                </span>
+              )}.
             </p>
+            <p>That beautiful moment marked the beginning of your journey.</p>
+          </div>
+
+          <div>
+            <h3 className="font-bold mb-1">Welcomed With Love</h3>
+            <p>
+              You were delivered at Ovum Hospitals,{" "}
+              {form.hospital && <span className="font-semibold" style={{ color: accentHex }}>{form.hospital}</span>},
+              surrounded by love and care.
+            </p>
+            {form.doctors.length > 0 && (
+              <p className="mt-2">
+                Your mother&apos;s trusted doctors,{" "}
+                <span className="font-semibold" style={{ color: accentHex }}>{form.doctors.join(", ")}</span>,
+                stood beside her along with your father,{" "}
+                {form.fatherName && <span className="font-semibold" style={{ color: accentHex }}>{form.fatherName}</span>}.
+              </p>
+            )}
+            {form.nurse.length > 0 && (
+              <p className="mt-2">
+                Sister{" "}
+                <span className="font-semibold" style={{ color: accentHex }}>{form.nurse.join(", ")}</span>{" "}
+                and her nursing team cared for you with warmth and devotion.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <h3 className="font-bold mb-1">A Father&apos;s First Hold</h3>
+            <p>Wrapped gently in soft cloth, you were placed into your father&apos;s arms for the very first time.</p>
+            {(form.grandmother || form.grandfather) && (
+              <p className="mt-2">
+                His joy was immeasurable as he introduced you to your loving family —{" "}
+                <span className="font-semibold" style={{ color: accentHex }}>
+                  {[form.grandmother, form.grandfather].filter(Boolean).join(", ")}
+                </span>{" "}
+                waiting excitedly to meet you.
+              </p>
+            )}
+          </div>
+
+          {form.roomType && (
+            <div>
+              <h3 className="font-bold mb-1">A Room Filled With Happiness</h3>
+              <p>
+                To celebrate your arrival, you were welcomed into the{" "}
+                <span className="font-semibold" style={{ color: accentHex }}>{form.roomType}</span>{" "}
+                chosen lovingly by your mother, decorated with balloons and colorful ribbons.
+              </p>
+              {form.checkInDate && (
+                <p className="mt-2">
+                  <span className="font-semibold" style={{ color: accentHex }}>
+                    On {form.checkInDate}{form.checkInTime && ` at ${form.checkInTime}`}
+                  </span>, your family settled in for a beautiful stay filled with unforgettable memories.
+                </p>
+              )}
+            </div>
           )}
-        </StorySection>
-      )}
 
-      <StorySection title="With Love, From Ovum">
-        <p>Your birth brought immense happiness not only to your family, but to all of us at Ovum Hospitals.</p>
-        <p className="mt-1">May your life always shine as brightly as the happiness you brought on your very first day.</p>
-      </StorySection>
-    </div>
-  );
-}
+          <div>
+            <h3 className="font-bold mb-1">With Love, From Ovum</h3>
+            <p>Your birth brought immense happiness not only to your family, but to all of us at Ovum Hospitals.</p>
+            <p className="mt-3">This keepsake is a celebration of the love, joy, and hope you brought into the world.</p>
+            <p className="mt-3">May your life always shine as brightly as the happiness you brought on your very first day.</p>
+          </div>
 
-function StorySection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h3 className="font-bold text-gray-900 mb-1">{title}</h3>
-      {children}
+        </div>
+      </div>
     </div>
   );
 }

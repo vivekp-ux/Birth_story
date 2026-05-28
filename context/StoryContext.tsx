@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect } from "react";
 
 export interface StoryForm {
   babyName: string;
@@ -25,6 +25,7 @@ export interface StoryForm {
   grandmother: string;
   grandfather: string;
   gender: "male" | "female" | "";
+  storyImage: string | null;
 }
 
 interface StoryContextType {
@@ -32,6 +33,8 @@ interface StoryContextType {
   setForm: React.Dispatch<React.SetStateAction<StoryForm>>;
   babyImage: string | null;
   setBabyImage: React.Dispatch<React.SetStateAction<string | null>>;
+  saveDraft: () => void;
+  draftSaved: boolean;
 }
 
 const INITIAL: StoryForm = {
@@ -41,17 +44,44 @@ const INITIAL: StoryForm = {
   hospital: "", doctors: [], nurse: [],
   roomType: "", checkInDate: "", checkInTime: "",
   firstOutfit: "", motherOutfit: "", story: "",
-  grandmother: "", grandfather: "", gender: "",
+  grandmother: "", grandfather: "", gender: "", storyImage: null,
 };
+
+const DRAFT_KEY = "ovum_story_draft";
 
 const StoryContext = createContext<StoryContextType | null>(null);
 
 export function StoryProvider({ children }: { children: ReactNode }) {
   const [form, setForm] = useState<StoryForm>(INITIAL);
   const [babyImage, setBabyImage] = useState<string | null>(null);
+  const [draftSaved, setDraftSaved] = useState(false);
+
+  // Load draft from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const { form: savedForm, babyImage: savedImage } = JSON.parse(saved);
+        if (savedForm) setForm({ ...INITIAL, ...savedForm });
+        if (savedImage) setBabyImage(savedImage);
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, []);
+
+  const saveDraft = () => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ form, babyImage }));
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2500);
+    } catch {
+      // ignore storage errors
+    }
+  };
 
   return (
-    <StoryContext.Provider value={{ form, setForm, babyImage, setBabyImage }}>
+    <StoryContext.Provider value={{ form, setForm, babyImage, setBabyImage, saveDraft, draftSaved }}>
       {children}
     </StoryContext.Provider>
   );

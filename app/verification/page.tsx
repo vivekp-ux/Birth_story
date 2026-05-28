@@ -13,22 +13,29 @@ export default function VerificationPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-white shadow-sm px-4 sm:px-8 py-4 flex items-center gap-4">
-        <Link href="/create-story" className="text-[#3bbfbf] text-sm hover:underline">← Back</Link>
+        <Link href="/create-story" className="flex items-center gap-1 px-4 py-2 rounded-lg border border-[#3bbfbf] text-[#3bbfbf] text-sm font-medium hover:bg-[#e8f7f7] transition-colors">← Back</Link>
         <h1 className="text-lg font-semibold text-gray-800">Verify Details</h1>
       </header>
 
       <main className="flex-1 flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-3xl flex flex-col lg:flex-row gap-6 items-center lg:items-stretch">
 
-          <div className="w-full lg:w-1/2 rounded-2xl overflow-hidden shadow-lg min-h-[300px] relative bg-white">
-            <Image
-              src={babyImage || "/Frame 1.png"}
-              alt="Baby"
-              width={600}
-              height={800}
-              className="w-full h-full object-contain"
-              priority
-            />
+          <div className="w-full lg:w-1/2 rounded-2xl overflow-hidden shadow-lg min-h-[300px] relative bg-white flex items-center justify-center">
+            {babyImage ? (
+              <Image
+                src={babyImage}
+                alt="Baby"
+                width={600}
+                height={800}
+                className="w-full h-full object-contain"
+                priority
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-3 p-8">
+                <Image src="/icon.png" alt="No image" width={64} height={64} className="object-contain opacity-40" />
+                <p className="text-sm text-gray-400">No photo uploaded</p>
+              </div>
+            )}
           </div>
 
           <div className="w-full lg:w-1/2 bg-white rounded-2xl shadow-lg p-6 sm:p-8 flex flex-col justify-between">

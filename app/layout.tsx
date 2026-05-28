@@ -8,6 +8,9 @@ const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Ovum Birth Story",
   description: "Your Birth Story — Ovum Woman & Child Speciality Hospital",
+  icons: {
+    icon: "/icon.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -25,7 +25,7 @@ function Field({ label, name, value, onChange, type = "text", placeholder = "", 
 }
 
 export default function CreateStoryPage() {
-  const { form, setForm, babyImage, setBabyImage } = useStory();
+  const { form, setForm, babyImage, setBabyImage, saveDraft, draftSaved } = useStory();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [doctorInput, setDoctorInput] = useState("");
   const [nurseInput, setNurseInput] = useState("");
@@ -61,7 +61,7 @@ export default function CreateStoryPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-white shadow-sm px-4 sm:px-8 py-4 flex items-center gap-4">
-        <Link href="/dashboard" className="text-[#3bbfbf] text-sm hover:underline">← Back</Link>
+        <Link href="/dashboard" className="flex items-center gap-1 px-4 py-2 rounded-lg border border-[#3bbfbf] text-[#3bbfbf] text-sm font-medium hover:bg-[#e8f7f7] transition-colors">← Back</Link>
         <div className="flex-1 flex justify-center">
           <Image src="/logo.png" alt="Ovum Hospital" width={120} height={44} className="object-contain" />
         </div>
@@ -81,8 +81,18 @@ export default function CreateStoryPage() {
                   : "bg-white border-blue-200 text-blue-400 hover:border-blue-400"
               }`}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9 12a5 5 0 1 0 0-10A5 5 0 0 0 9 12zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z" transform="translate(3 1)" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-5 h-5"
+              >
+                <circle cx="10" cy="14" r="5" />
+                <path d="M13.5 10.5L19 5m-4 0h4v4" />
               </svg>
               Boy
             </button>
@@ -96,8 +106,18 @@ export default function CreateStoryPage() {
                   : "bg-white border-pink-200 text-pink-400 hover:border-pink-400"
               }`}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 12c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-5 h-5"
+              >
+                <circle cx="12" cy="9" r="5" />
+                <path d="M12 14v7m-3-3h6" />
               </svg>
               Girl
             </button>
@@ -292,8 +312,12 @@ export default function CreateStoryPage() {
             <Link href="/verification" className={`flex-1 text-center font-semibold rounded-lg py-2.5 transition-colors ${btnPrimary}`}>
               Preview Story
             </Link>
-            <button type="submit" className={`flex-1 font-semibold rounded-lg py-2.5 transition-colors ${btnSecondary}`}>
-              Save Draft
+            <button
+              type="button"
+              onClick={saveDraft}
+              className={`flex-1 font-semibold rounded-lg py-2.5 transition-colors ${btnSecondary}`}
+            >
+              {draftSaved ? "✓ Draft Saved!" : "Save Draft"}
             </button>
           </div>
         </form>
