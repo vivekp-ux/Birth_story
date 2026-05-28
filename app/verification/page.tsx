@@ -5,6 +5,10 @@ import { useStory } from "@/context/StoryContext";
 
 export default function VerificationPage() {
   const { form, babyImage } = useStory();
+  const accent = form.gender === "female" ? "text-pink-400" : "text-[#3bbfbf]";
+  const accentHex = form.gender === "female" ? "#f472b6" : "#3bbfbf";
+  const btnPrimary = form.gender === "female" ? "bg-pink-400 hover:bg-pink-500 text-white" : "bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white";
+  const btnSecondary = form.gender === "female" ? "border border-pink-400 text-pink-400 hover:bg-pink-50" : "border border-[#3bbfbf] text-[#3bbfbf] hover:bg-[#e8f7f7]";
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -16,13 +20,13 @@ export default function VerificationPage() {
       <main className="flex-1 flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-3xl flex flex-col lg:flex-row gap-6 items-center lg:items-stretch">
 
-          <div className="w-full lg:w-1/2 rounded-2xl overflow-hidden shadow-lg min-h-[300px] relative">
+          <div className="w-full lg:w-1/2 rounded-2xl overflow-hidden shadow-lg min-h-[300px] relative bg-white">
             <Image
               src={babyImage || "/Frame 1.png"}
               alt="Baby"
               width={600}
               height={800}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
               priority
             />
           </div>
@@ -33,7 +37,7 @@ export default function VerificationPage() {
                 <Image src="/logo.png" alt="Ovum Hospital" width={130} height={48} className="object-contain" />
               </div>
 
-              <h2 className="text-base font-semibold text-gray-700 uppercase tracking-widest mb-5">
+              <h2 className={`text-base font-semibold uppercase tracking-widest mb-5 ${accent}`}>
                 Your First Moments
               </h2>
 
@@ -48,7 +52,7 @@ export default function VerificationPage() {
                 ].map(([label, value]) => (
                   <div key={label} className="flex justify-between items-center border-b border-gray-100 pb-2">
                     <dt className="font-semibold text-gray-600">{label}</dt>
-                    <dd className="text-[#3bbfbf] font-semibold">{value}</dd>
+                    <dd className="font-semibold" style={{ color: accentHex }}>{value}</dd>
                   </div>
                 ))}
               </dl>
@@ -63,10 +67,10 @@ export default function VerificationPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 mt-8">
-              <Link href="/pdf-preview" className="flex-1 text-center bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white font-semibold rounded-lg py-2.5 text-sm transition-colors">
+              <Link href="/pdf-preview" className={`flex-1 text-center font-semibold rounded-lg py-2.5 text-sm transition-colors ${btnPrimary}`}>
                 Looks Good → Preview PDF
               </Link>
-              <Link href="/create-story" className="flex-1 text-center border border-[#3bbfbf] text-[#3bbfbf] hover:bg-[#e8f7f7] font-semibold rounded-lg py-2.5 text-sm transition-colors">
+              <Link href="/create-story" className={`flex-1 text-center font-semibold rounded-lg py-2.5 text-sm transition-colors ${btnSecondary}`}>
                 Edit Details
               </Link>
             </div>

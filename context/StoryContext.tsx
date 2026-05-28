@@ -14,14 +14,17 @@ export interface StoryForm {
   latitude: string;
   longitude: string;
   hospital: string;
-  doctors: string;
-  nurse: string;
+  doctors: string[];
+  nurse: string[];
   roomType: string;
   checkInDate: string;
   checkInTime: string;
   firstOutfit: string;
   motherOutfit: string;
   story: string;
+  grandmother: string;
+  grandfather: string;
+  gender: "male" | "female" | "";
 }
 
 interface StoryContextType {
@@ -35,9 +38,10 @@ const INITIAL: StoryForm = {
   babyName: "", motherName: "", fatherName: "",
   birthDate: "", birthTime: "", firstCryTime: "",
   birthWeight: "", height: "", latitude: "", longitude: "",
-  hospital: "", doctors: "", nurse: "",
+  hospital: "", doctors: [], nurse: [],
   roomType: "", checkInDate: "", checkInTime: "",
   firstOutfit: "", motherOutfit: "", story: "",
+  grandmother: "", grandfather: "", gender: "",
 };
 
 const StoryContext = createContext<StoryContextType | null>(null);

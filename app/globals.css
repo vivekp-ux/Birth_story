@@ -42,4 +42,8 @@ body {
     border-radius: 0;
     page-break-inside: avoid;
   }
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
 }
