@@ -1,38 +1,8 @@
 "use client";
-import { useState, useRef } from "react";
+import { useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-
-interface StoryForm {
-  babyName: string;
-  motherName: string;
-  fatherName: string;
-  birthDate: string;
-  birthTime: string;
-  firstCryTime: string;
-  birthWeight: string;
-  height: string;
-  latitude: string;
-  longitude: string;
-  hospital: string;
-  doctors: string;
-  nurse: string;
-  roomType: string;
-  checkInDate: string;
-  checkInTime: string;
-  firstOutfit: string;
-  motherOutfit: string;
-  story: string;
-}
-
-const INITIAL: StoryForm = {
-  babyName: "", motherName: "", fatherName: "",
-  birthDate: "", birthTime: "", firstCryTime: "",
-  birthWeight: "", height: "", latitude: "", longitude: "",
-  hospital: "", doctors: "", nurse: "",
-  roomType: "", checkInDate: "", checkInTime: "",
-  firstOutfit: "", motherOutfit: "", story: "",
-};
+import { useStory } from "@/context/StoryContext";
 
 function Field({ label, name, value, onChange, type = "text", placeholder = "" }: {
   label: string; name: string; value: string;
@@ -55,8 +25,7 @@ function Field({ label, name, value, onChange, type = "text", placeholder = "" }
 }
 
 export default function CreateStoryPage() {
-  const [form, setForm] = useState<StoryForm>(INITIAL);
-  const [babyImage, setBabyImage] = useState<string | null>(null);
+  const { form, setForm, babyImage, setBabyImage } = useStory();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -81,7 +50,7 @@ export default function CreateStoryPage() {
       <main className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-10">
         <form className="bg-white/90 backdrop-blur-sm rounded-2xl shadow p-6 sm:p-8 flex flex-col gap-6" onSubmit={(e) => e.preventDefault()}>
 
-          {/* Baby Info — wide card with image */}
+          {/* Baby Details */}
           <section>
             <h2 className="text-base font-semibold text-[#3bbfbf] mb-4">Baby Details</h2>
             <div className="flex flex-col lg:flex-row gap-6">
@@ -91,29 +60,16 @@ export default function CreateStoryPage() {
                 style={{ minHeight: "260px" }}
                 onClick={() => fileInputRef.current?.click()}
               >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png"
-                  className="hidden"
-                  onChange={handleImageChange}
-                />
+                <input ref={fileInputRef} type="file" accept="image/png" className="hidden" onChange={handleImageChange} />
                 {babyImage ? (
-                  <Image
-                    src={babyImage}
-                    alt="Baby"
-                    fill
-                    className="object-cover"
-                  />
+                  <Image src={babyImage} alt="Baby" fill className="object-cover" />
                 ) : (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#f0fafa] group-hover:bg-[#e0f5f5] transition-colors p-4">
-                    {/* Upload icon */}
                     <Image src="/icon.png" alt="Upload" width={48} height={48} className="object-contain" />
                     <p className="text-sm font-semibold text-[#3bbfbf] text-center">Upload Baby Photo</p>
                     <p className="text-xs text-gray-400 text-center">PNG only · Click to browse</p>
                   </div>
                 )}
-                {/* Change overlay when image is set */}
                 {babyImage && (
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <p className="text-white text-sm font-semibold">Change Photo</p>
@@ -156,7 +112,7 @@ export default function CreateStoryPage() {
             </div>
           </section>
 
-          {/* Outfits */}
+          {/* First Moments */}
           <section>
             <h2 className="text-base font-semibold text-[#3bbfbf] mb-4">First Moments</h2>
             <div className="grid grid-cols-1 gap-4">
@@ -165,7 +121,7 @@ export default function CreateStoryPage() {
             </div>
           </section>
 
-          {/* Story */}
+          {/* Birth Story */}
           <section>
             <h2 className="text-base font-semibold text-[#3bbfbf] mb-4">Birth Story</h2>
             <textarea
@@ -179,16 +135,10 @@ export default function CreateStoryPage() {
           </section>
 
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <Link
-              href="/verification"
-              className="flex-1 text-center bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white font-semibold rounded-lg py-2.5 transition-colors"
-            >
+            <Link href="/verification" className="flex-1 text-center bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white font-semibold rounded-lg py-2.5 transition-colors">
               Preview Story
             </Link>
-            <button
-              type="submit"
-              className="flex-1 border border-[#3bbfbf] text-[#3bbfbf] hover:bg-[#e8f7f7] font-semibold rounded-lg py-2.5 transition-colors"
-            >
+            <button type="submit" className="flex-1 border border-[#3bbfbf] text-[#3bbfbf] hover:bg-[#e8f7f7] font-semibold rounded-lg py-2.5 transition-colors">
               Save Draft
             </button>
           </div>
