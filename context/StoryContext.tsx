@@ -34,6 +34,7 @@ interface StoryContextType {
   babyImage: string | null;
   setBabyImage: React.Dispatch<React.SetStateAction<string | null>>;
   saveDraft: () => void;
+  clearDraft: () => void;
   draftSaved: boolean;
 }
 
@@ -80,8 +81,18 @@ export function StoryProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+      setForm(INITIAL);
+      setBabyImage(null);
+    } catch {
+      // ignore storage errors
+    }
+  };
+
   return (
-    <StoryContext.Provider value={{ form, setForm, babyImage, setBabyImage, saveDraft, draftSaved }}>
+    <StoryContext.Provider value={{ form, setForm, babyImage, setBabyImage, saveDraft, clearDraft, draftSaved }}>
       {children}
     </StoryContext.Provider>
   );

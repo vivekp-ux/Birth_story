@@ -4,18 +4,23 @@ import Image from "next/image";
 import { useStory, StoryForm } from "@/context/StoryContext";
 
 export default function PdfPreviewPage() {
-  const { form, babyImage } = useStory();
+  const { form, babyImage, clearDraft } = useStory();
   const accentHex = form.gender === "female" ? "#f472b6" : "#3bbfbf";
   const btnClass = form.gender === "female"
     ? "bg-pink-400 hover:bg-pink-500 text-white"
     : "bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white";
+
+  const handlePrint = () => {
+    window.print();
+    clearDraft();
+  };
 
   return (
     <div className="min-h-screen">
       <header className="bg-white shadow-sm px-4 sm:px-8 py-4 flex items-center justify-between gap-4 print:hidden">
         <Link href="/verification" className="flex items-center gap-1 px-4 py-2 rounded-lg border border-[#3bbfbf] text-[#3bbfbf] text-sm font-medium hover:bg-[#e8f7f7] transition-colors">← Back</Link>
         <h1 className="text-lg font-semibold text-gray-800">PDF Preview</h1>
-        <button onClick={() => window.print()} className={`text-sm font-semibold px-5 py-2 rounded-lg transition-colors ${btnClass}`}>
+        <button onClick={handlePrint} className={`text-sm font-semibold px-5 py-2 rounded-lg transition-colors ${btnClass}`}>
           Print / Save PDF
         </button>
       </header>

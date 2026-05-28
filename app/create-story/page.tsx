@@ -2,7 +2,12 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useStory } from "@/context/StoryContext";
+
+const MapPreview = dynamic(() => import("@/components/MapPreview"), {
+  ssr: false,
+});
 
 function Field({ label, name, value, onChange, type = "text", placeholder = "", ringColor = "focus:ring-[#3bbfbf]" }: {
   label: string; name: string; value: string;
@@ -32,6 +37,17 @@ export default function CreateStoryPage() {
 
   const isBoy = form.gender === "male";
   const isGirl = form.gender === "female";
+
+  const latitude = parseFloat(form.latitude);
+  const longitude = parseFloat(form.longitude);
+
+  const isValidLocation =
+    !isNaN(latitude) &&
+    !isNaN(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180;
 
   // Dynamic color classes based on gender
   const accent = isGirl ? "text-pink-400" : "text-[#3bbfbf]";
@@ -155,8 +171,8 @@ export default function CreateStoryPage() {
                   { label: "First Cry Time", name: "firstCryTime", type: "time" },
                   { label: "Birth Weight (kg)", name: "birthWeight", placeholder: "2.8" },
                   { label: "Height (cm)", name: "height", placeholder: "49" },
-                  { label: "Latitude", name: "latitude", placeholder: "13.0216° N" },
-                  { label: "Longitude", name: "longitude", placeholder: "77.6423° E" },
+                  { label: "Latitude", name: "latitude", placeholder: "13.0216" },
+                  { label: "Longitude", name: "longitude", placeholder: "77.6423" },
                 ].map(({ label, name, type, placeholder }) => (
                   <div key={name} className="flex flex-col gap-1">
                     <label className="text-sm font-medium text-gray-600">{label}</label>
@@ -170,6 +186,11 @@ export default function CreateStoryPage() {
                     />
                   </div>
                 ))}
+                {isValidLocation && (
+                  <div className="sm:col-span-2 mt-2">
+                    <MapPreview lat={latitude} lng={longitude} />
+                  </div>
+                )}
               </div>
             </div>
           </section>
