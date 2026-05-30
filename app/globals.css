@@ -81,3 +81,60 @@ body {
     margin: 0 !important;
   }
 }
+
+/* PDF preview responsive scaling */
+.pdf-scale-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  overflow-x: hidden;
+}
+
+.pdf-page-landscape {
+  width: 297mm;
+  flex-shrink: 0;
+  transform-origin: top center;
+}
+
+/* 1440px — fits comfortably, slight scale for padding */
+@media (max-width: 1440px) {
+  .pdf-page-landscape {
+    transform: scale(0.92);
+    margin-bottom: calc((210mm * 0.92) - 210mm);
+  }
+}
+
+/* ~1200px */
+@media (max-width: 1200px) {
+  .pdf-page-landscape {
+    transform: scale(0.78);
+    margin-bottom: calc((210mm * 0.78) - 210mm);
+  }
+}
+
+/* ~900px */
+@media (max-width: 900px) {
+  .pdf-page-landscape {
+    transform: scale(0.58);
+    margin-bottom: calc((210mm * 0.58) - 210mm);
+  }
+}
+
+/* ~640px */
+@media (max-width: 640px) {
+  .pdf-page-landscape {
+    transform: scale(0.38);
+    margin-bottom: calc((210mm * 0.38) - 210mm);
+  }
+}
+
+@media print {
+  .pdf-scale-wrapper {
+    display: block;
+    overflow: visible;
+  }
+  .pdf-page-landscape {
+    transform: none !important;
+    margin-bottom: 0 !important;
+  }
+}
