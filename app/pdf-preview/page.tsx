@@ -5,10 +5,10 @@ import { useStory, StoryForm } from "@/context/StoryContext";
 
 export default function PdfPreviewPage() {
   const { form, babyImage, clearDraft } = useStory();
-  const accentHex = form.gender === "female" ? "#f472b6" : "#3bbfbf";
+  const accentHex = form.gender === "female" ? "#e01a8b" : "#0da1b8";
   const btnClass = form.gender === "female"
-    ? "bg-pink-400 hover:bg-pink-500 text-white"
-    : "bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white";
+    ? "bg-pink-500 hover:bg-pink-600 text-white"
+    : "bg-[#0da1b8] hover:bg-[#0b8ea3] text-white";
 
   const handlePrint = () => {
     window.print();
@@ -16,7 +16,7 @@ export default function PdfPreviewPage() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen print-root">
       <header className="bg-white shadow-sm px-4 sm:px-8 py-4 flex items-center justify-between gap-4 print:hidden">
         <Link href="/verification" className="flex items-center gap-1 px-4 py-2 rounded-lg border border-[#3bbfbf] text-[#3bbfbf] text-sm font-medium hover:bg-[#e8f7f7] transition-colors">← Back</Link>
         <h1 className="text-lg font-semibold text-gray-800">PDF Preview</h1>
@@ -25,14 +25,14 @@ export default function PdfPreviewPage() {
         </button>
       </header>
 
-      <div className="py-8 px-4 print:p-0 print:py-0">
-        {/* Spread 1 — full-width single card matching the design */}
-        <div className="w-full max-w-[900px] mx-auto rounded-2xl overflow-hidden shadow-lg print:shadow-none">
+      <div className="py-8 px-4 print:p-0 print:py-0 flex flex-col gap-8 print:gap-0 print-container">
+        {/* Spread 1 — Cover and Stats (A4 Landscape) */}
+        <div className="w-full max-w-[297mm] mx-auto rounded-2xl overflow-hidden shadow-lg print:shadow-none print:rounded-none print-page">
           <PageInside form={form} accentHex={accentHex} />
         </div>
 
-        {/* Spread 2 */}
-        <div className="flex flex-col sm:flex-row mt-6 print:mt-0 w-full max-w-[900px] mx-auto rounded-2xl overflow-hidden shadow-lg print:shadow-none print:page-break-before-always">
+        {/* Spread 2 — Photo and Story text (A4 Landscape) */}
+        <div className="w-full max-w-[297mm] mx-auto rounded-2xl overflow-hidden shadow-lg print:shadow-none print:rounded-none print-page">
           <PageStory form={form} accentHex={accentHex} storyImage={babyImage} />
         </div>
       </div>
@@ -40,112 +40,142 @@ export default function PdfPreviewPage() {
   );
 }
 
-/* ─── Inside card — matching reference design ─── */
+/* ─── Page 1: Inside cover spread — matching reference design ─── */
 function PageInside({ form, accentHex }: { form: StoryForm; accentHex: string }) {
+  const isFemale = form.gender === "female";
+  
   return (
     <div
-      className="relative overflow-hidden flex flex-col items-center"
+      className="relative overflow-hidden flex select-none"
       style={{
-        width: "210mm",
-        height: "297mm",
-        background: "linear-gradient(180deg, #f7fbfa 0%, #eef8f8 50%, #edf6f5 100%)",
+        width: "297mm",
+        height: "210mm",
       }}
     >
-      {/* Water texture overlay */}
-      <div className="absolute inset-0 opacity-20 pointer-events-none"
-        style={{ background: "radial-gradient(circle at top left, #cde8e5 0, transparent 30%), radial-gradient(circle at bottom right, #bde4e1 0, transparent 35%)" }}
-      />
-
-      {/* Top Title */}
-      <div className="relative z-10 mt-10 text-center">
-        <p className="text-[32px] font-light tracking-wide text-[#1f1f1f] leading-none">YOUR</p>
-        <p className="text-[90px] leading-[0.8]" style={{ color: accentHex, fontFamily: "'Brush Script MT', cursive" }}>
-          Birth
-        </p>
-        <div className="flex items-center gap-2">
-          <p className="text-[34px] tracking-[0.2em] font-light text-[#1f1f1f] -mt-1">STORY</p>
-          <span className="opacity-25 text-3xl select-none">👣</span>
-        </div>
-      </div>
-
-      {/* Main Info Card */}
+      {/* LEFT COLUMN */}
       <div
-        className="relative z-10 mt-10 w-[72%] rounded-[20px] border border-white/70 px-8 py-7"
+        className="relative w-1/2 h-full flex flex-col items-center select-none"
         style={{
-          background: accentHex === "#f472b6"
-            ? "linear-gradient(135deg, rgba(251,207,232,0.95) 0%, rgba(244,171,200,0.92) 100%)"
-            : "linear-gradient(135deg, rgba(210,235,238,0.95) 0%, rgba(190,222,228,0.92) 100%)",
-          boxShadow: "0 4px 18px rgba(0,0,0,0.06)",
+          backgroundImage: isFemale ? "url('/pink bk.png')" : "url('/birth Dev bk-1.png')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
         }}
       >
-        <p className="text-[20px] font-semibold text-[#111] mb-6">
-          Your{" "}
-          <span style={{ color: accentHex, fontStyle: "italic", fontWeight: 400, fontFamily: "Georgia, serif" }}>First</span>
-          {" "}Moments
-        </p>
+        {/* Moments Card */}
+        <div
+          className="mt-16 w-[52%] rounded-[18px] border border-white/70 px-6 py-6"
+          style={{
+            background: isFemale
+              ? "rgba(252,222,236,0.88)"
+              : "rgba(196,228,235,0.88)",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+          }}
+        >
+          <p className="text-[15px] font-semibold text-[#111] mb-5">
+            Your{" "}
+            <span
+              className="italic font-normal"
+              style={{
+                color: accentHex,
+                fontFamily: "'Brush Script MT', cursive",
+                fontSize: "22px",
+              }}
+            >
+              First
+            </span>{" "}
+            Moments
+          </p>
 
-        <div className="space-y-5">
-          <div>
-            <p className="text-[18px] font-semibold text-[#111]">First Feed:</p>
-            <p className="text-[18px] font-bold" style={{ color: accentHex }}>{form.firstCryTime || "—"}</p>
-          </div>
-          <div>
-            <p className="text-[18px] font-semibold text-[#111]">Birth Weight:</p>
-            <p className="text-[18px] font-bold" style={{ color: accentHex }}>{form.birthWeight ? `${form.birthWeight} kg` : "—"}</p>
-          </div>
-          <div>
-            <p className="text-[18px] font-semibold text-[#111]">Height:</p>
-            <p className="text-[18px] font-bold" style={{ color: accentHex }}>{form.height ? `${form.height} cm` : "—"}</p>
-          </div>
-          <div>
-            <p className="text-[18px] font-semibold text-[#111]">Latitude:</p>
-            <p className="text-[18px] font-bold leading-snug" style={{ color: accentHex }}>
-              {form.latitude || "—"}
-              {form.longitude && <><br />{form.longitude}</>}
-            </p>
-          </div>
-          <div className="pt-4">
-  <p className="text-[17px] leading-relaxed text-[#111]">
-    Your first outfit was white and pink, while your mother wore a
-    cream gown with brown lines during delivery.
-  </p>
-</div>
-          {(form.firstOutfit || form.motherOutfit) && (
-            <div className="pt-4">
-              <p className="text-[17px] leading-relaxed text-[#111]">
-                {form.firstOutfit && `Your first outfit was ${form.firstOutfit}`}
-                {form.firstOutfit && form.motherOutfit && ", while your mother wore "}
-                {form.motherOutfit && `${form.motherOutfit} during delivery.`}
+          <div className="space-y-4">
+            <div>
+              <p className="font-semibold text-[13px] text-[#111]">First Feed:</p>
+              <p className="font-bold text-[15px]" style={{ color: accentHex }}>
+                {form.firstCryTime || "—"}
               </p>
             </div>
-          )}
+
+            <div>
+              <p className="font-semibold text-[13px] text-[#111]">Birth Weight:</p>
+              <p className="font-bold text-[15px]" style={{ color: accentHex }}>
+                {form.birthWeight ? `${form.birthWeight} kg` : "—"}
+              </p>
+            </div>
+
+            <div>
+              <p className="font-semibold text-[13px] text-[#111]">Height:</p>
+              <p className="font-bold text-[15px]" style={{ color: accentHex }}>
+                {form.height ? `${form.height} cm` : "—"}
+              </p>
+            </div>
+
+            <div>
+              <p className="font-semibold text-[13px] text-[#111]">Latitude:</p>
+              <p className="font-bold text-[15px]" style={{ color: accentHex }}>
+                {form.latitude || "—"}
+              </p>
+            </div>
+
+            <div>
+              <p className="font-semibold text-[13px] text-[#111]">Longitude:</p>
+              <p className="font-bold text-[15px]" style={{ color: accentHex }}>
+                {form.longitude || "—"}
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <p className="text-[13px] leading-[1.3] text-[#111]">
+                Your first outfit was {form.firstOutfit || "white and pink"}, while your mother wore a{" "}
+                {form.motherOutfit || "cream gown with brown lines"} during delivery.
+              </p>
+            </div>
+          </div>
         </div>
+
+        {/* Logo Below Card */}
+        <div className="mt-12 flex flex-col items-center">
+          <div className="relative w-[170px] h-[48px]">
+            <Image src="/logo.png" alt="Ovum" fill className="object-contain" />
+          </div>
+
+          <p className="text-[10px] font-medium mt-1" style={{ color: accentHex }}>
+            Woman &amp; Child Speciality Hospital
+          </p>
+
+          <p className="text-[7px] text-gray-500">
+            (A Unit of Neonatal Care &amp; Research Institute Pvt Ltd)
+          </p>
+        </div>
+
+        {/* Bottom Strip */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-[20px]"
+          style={{ backgroundColor: accentHex }}
+        />
       </div>
 
-      {/* Footer Logo */}
-      <div className="relative z-10 mt-auto mb-16 flex flex-col items-center">
-        <div className="relative w-[180px] h-[55px]">
-          <Image src="/logo.png" alt="Ovum" fill className="object-contain" />
-        </div>
-        <p className="text-[16px] mt-1" style={{ color: accentHex }}>Woman &amp; Child Speciality Hospital</p>
-        <p className="text-[10px] text-gray-500">(A Unit of Neonatal Care &amp; Research Institute Pvt Ltd)</p>
-      </div>
-
-      {/* Bottom Accent Strip */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-[22px]"
-        style={{ background: `linear-gradient(90deg, ${accentHex}, #22c7df)` }}
+      {/* RIGHT COLUMN: Cover Page (Title and Artwork) */}
+      <div 
+        className="w-1/2 h-full relative"
+        style={{
+          backgroundImage: isFemale ? "url('/pink Right side.png')" : "url('/right reference (1).png')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
       />
     </div>
   );
 }
 
-/* ─── Story text page — Full A4 portrait layout ─── */
+/* ─── Page 2: Story text page — Full A4 landscape layout ─── */
 function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex: string; storyImage: string | null }) {
   return (
     <div
       className="relative overflow-hidden flex"
-      style={{ width: "210mm", height: "297mm", background: accentHex === "#f472b6" ? "#f5c6e0" : "#d7eef0" }}
+      style={{
+        width: "297mm",
+        height: "210mm",
+        background: accentHex === "#f472b6" ? "#f5c6e0" : "#d7eef0"
+      }}
     >
       {/* Left image section */}
       <div className="relative flex items-center justify-center bg-white/30" style={{ width: "52%", height: "100%" }}>
@@ -155,8 +185,8 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
             alt="Birth Story"
             fill
             priority
-            className="object-contain"
-            sizes="100vw"
+            className="object-cover"
+            sizes="50vw"
           />
         ) : (
           <div className="flex flex-col items-center gap-3">
@@ -167,14 +197,14 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
       </div>
 
       {/* Divider */}
-      <div className="w-[1px] bg-[#5e6b6b]" />
+      <div className="w-[1.5px] bg-[#5e6b6b]/30 z-10" />
 
       {/* Right story section */}
-      <div className="flex-1 px-10 py-8 overflow-hidden" style={{ background: accentHex === "#f472b6" ? "#f9d0e8" : "#c7e4e7" }}>
-        <div className="space-y-8 text-[14px] leading-[1.4] text-[#111]">
+      <div className="flex-1 px-8 py-6 overflow-hidden flex flex-col justify-center" style={{ background: accentHex === "#f472b6" ? "#f9d0e8" : "#c7e4e7" }}>
+        <div className="space-y-4 text-[12.5px] leading-[1.35] text-[#111]">
 
           <div>
-            <h3 className="font-bold mb-1">The First Cry</h3>
+            <h3 className="font-bold text-[13.5px] mb-0.5 text-gray-900">The First Cry</h3>
             <p>
               Your mother,{" "}
               <span className="font-semibold" style={{ color: accentHex }}>{form.motherName || "your mother"}</span>,
@@ -189,14 +219,14 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
           </div>
 
           <div>
-            <h3 className="font-bold mb-1">Welcomed With Love</h3>
+            <h3 className="font-bold text-[13.5px] mb-0.5 text-gray-900">Welcomed With Love</h3>
             <p>
               You were delivered at Ovum Hospitals,{" "}
               {form.hospital && <span className="font-semibold" style={{ color: accentHex }}>{form.hospital}</span>},
               surrounded by love and care.
             </p>
             {form.doctors.length > 0 && (
-              <p className="mt-2">
+              <p className="mt-1">
                 Your mother&apos;s trusted doctors,{" "}
                 <span className="font-semibold" style={{ color: accentHex }}>{form.doctors.join(", ")}</span>,
                 stood beside her along with your father,{" "}
@@ -204,7 +234,7 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
               </p>
             )}
             {form.nurse.length > 0 && (
-              <p className="mt-2">
+              <p className="mt-1">
                 Sister{" "}
                 <span className="font-semibold" style={{ color: accentHex }}>{form.nurse.join(", ")}</span>{" "}
                 and her nursing team cared for you with warmth and devotion.
@@ -213,10 +243,10 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
           </div>
 
           <div>
-            <h3 className="font-bold mb-1">A Father&apos;s First Hold</h3>
+            <h3 className="font-bold text-[13.5px] mb-0.5 text-gray-900">A Father&apos;s First Hold</h3>
             <p>Wrapped gently in soft cloth, you were placed into your father&apos;s arms for the very first time.</p>
             {(form.grandmother || form.grandfather) && (
-              <p className="mt-2">
+              <p className="mt-1">
                 His joy was immeasurable as he introduced you to your loving family —{" "}
                 <span className="font-semibold" style={{ color: accentHex }}>
                   {[form.grandmother, form.grandfather].filter(Boolean).join(", ")}
@@ -228,14 +258,14 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
 
           {form.roomType && (
             <div>
-              <h3 className="font-bold mb-1">A Room Filled With Happiness</h3>
+              <h3 className="font-bold text-[13.5px] mb-0.5 text-gray-900">A Room Filled With Happiness</h3>
               <p>
                 To celebrate your arrival, you were welcomed into the{" "}
                 <span className="font-semibold" style={{ color: accentHex }}>{form.roomType}</span>{" "}
                 chosen lovingly by your mother, decorated with balloons and colorful ribbons.
               </p>
               {form.checkInDate && (
-                <p className="mt-2">
+                <p className="mt-1">
                   <span className="font-semibold" style={{ color: accentHex }}>
                     On {form.checkInDate}{form.checkInTime && ` at ${form.checkInTime}`}
                   </span>, your family settled in for a beautiful stay filled with unforgettable memories.
@@ -245,10 +275,10 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
           )}
 
           <div>
-            <h3 className="font-bold mb-1">With Love, From Ovum</h3>
+            <h3 className="font-bold text-[13.5px] mb-0.5 text-gray-900">With Love, From Ovum</h3>
             <p>Your birth brought immense happiness not only to your family, but to all of us at Ovum Hospitals.</p>
-            <p className="mt-3">This keepsake is a celebration of the love, joy, and hope you brought into the world.</p>
-            <p className="mt-3">May your life always shine as brightly as the happiness you brought on your very first day.</p>
+            <p className="mt-1">This keepsake is a celebration of the love, joy, and hope you brought into the world.</p>
+            <p className="mt-1 font-semibold italic text-[12px] opacity-80">May your life always shine as brightly as the happiness you brought on your very first day.</p>
           </div>
 
         </div>

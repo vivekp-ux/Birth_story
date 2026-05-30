@@ -33,17 +33,51 @@ body {
   color: var(--ovum-teal);
 }
 
+.font-script {
+  font-family: var(--font-great-vibes), cursive;
+}
+
 /* Print styles */
 @media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    background-image: none !important;
+    width: 297mm !important;
+    height: auto !important;
+  }
   header, .print\:hidden { display: none !important; }
-  body { background: white; }
   .preview-spread {
     box-shadow: none;
     border-radius: 0;
     page-break-inside: avoid;
   }
+  .print-root, .print-container {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 297mm !important;
+    height: auto !important;
+  }
+  .print-page {
+    width: 297mm !important;
+    height: 210mm !important;
+    page-break-inside: avoid !important;
+    page-break-after: always !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+  }
+  .print-page:last-child {
+    page-break-after: avoid !important;
+  }
   @page {
-    size: A4 portrait;
-    margin: 0;
+    size: A4 landscape;
+    margin: 0 !important;
   }
 }
