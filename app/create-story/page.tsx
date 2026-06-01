@@ -7,7 +7,23 @@ import { useStory } from "@/context/StoryContext";
 
 const MapPreview = dynamic(() => import("@/components/MapPreview"), {
   ssr: false,
+  loading: () => (
+    <div className="w-full h-[300px] rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center text-sm text-gray-400">
+      Loading map…
+    </div>
+  ),
 });
+
+const BRANCHES = [
+  { name: "Banashankari (Bangalore)",   lat: "12.9248", lng: "77.5401" },
+  { name: "HSR Layout (Bangalore)",     lat: "12.9103", lng: "77.6432" },
+  { name: "Kalyan Nagar (Bangalore)",   lat: "13.0221", lng: "77.6494" },
+  { name: "Hennur Road (Bangalore)",    lat: "13.0538", lng: "77.6398" },
+  { name: "Bhattarahalli (Bangalore)",  lat: "13.0242", lng: "77.7126" },
+  { name: "Budigere Cross (Bangalore)", lat: "13.0505", lng: "77.7411" },
+  { name: "Hoskote (Bangalore Rural)",  lat: "13.0691", lng: "77.7981" },
+  { name: "Hosur (Tamil Nadu)",         lat: "12.7364", lng: "77.8322" },
+];
 
 function Field({ label, name, value, onChange, type = "text", placeholder = "", ringColor = "focus:ring-[#3bbfbf]" }: {
   label: string; name: string; value: string;
@@ -147,14 +163,14 @@ export default function CreateStoryPage() {
                 className={`w-full lg:w-64 h-[320px] flex-shrink-0 rounded-xl overflow-hidden shadow border-2 border-dashed ${uploadBorder} cursor-pointer group relative`}
                 onClick={() => fileInputRef.current?.click()}
               >
-                <input ref={fileInputRef} type="file" accept="image/png" className="hidden" onChange={handleImageChange} />
+                <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={handleImageChange} />
                 {babyImage ? (
                   <Image src={babyImage} alt="Baby" fill className="object-contain bg-white" />
                 ) : (
                   <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 ${uploadBg} transition-colors p-4`}>
                     <Image src="/icon.png" alt="Upload" width={48} height={48} className="object-contain" />
                     <p className={`text-sm font-semibold ${uploadText} text-center`}>Upload Baby Photo</p>
-                    <p className="text-xs text-gray-400 text-center">PNG only · Click to browse</p>
+                    <p className="text-xs text-gray-400 text-center">Supported formats: JPG, JPEG, PNG, WEBP</p>
                   </div>
                 )}
                 {babyImage && (
@@ -186,11 +202,30 @@ export default function CreateStoryPage() {
                     />
                   </div>
                 ))}
-                {isValidLocation && (
-                  <div className="sm:col-span-2 mt-2">
-                    <MapPreview lat={latitude} lng={longitude} />
-                  </div>
-                )}
+
+                {/* Branch dropdown — auto-fills lat/lng */}
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <label className="text-sm font-medium text-gray-600">Hospital / Branch</label>
+                  <select
+                    name="hospital"
+                    value={form.hospital}
+                    onChange={(e) => {
+                      const branch = BRANCHES.find((b) => b.name === e.target.value);
+                      setForm((f) => ({
+                        ...f,
+                        hospital: e.target.value,
+                        latitude: branch ? branch.lat : f.latitude,
+                        longitude: branch ? branch.lng : f.longitude,
+                      }));
+                    }}
+                    className={`border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor} bg-white`}
+                  >
+                    <option value="">Select branch</option>
+                    {BRANCHES.map((b) => (
+                      <option key={b.name} value={b.name}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </section>
@@ -199,10 +234,13 @@ export default function CreateStoryPage() {
           <section>
             <h2 className={`text-base font-semibold mb-4 ${accent}`}>Family</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Mother's Name" name="motherName" value={form.motherName} onChange={handleChange} ringColor={ringColor} />
-              <Field label="Father's Name" name="fatherName" value={form.fatherName} onChange={handleChange} ringColor={ringColor} />
-              <Field label="Grandmother's Name" name="grandmother" value={form.grandmother} onChange={handleChange} placeholder="Grandmother's name" ringColor={ringColor} />
-              <Field label="Grandfather's Name" name="grandfather" value={form.grandfather} onChange={handleChange} placeholder="Grandfather's name" ringColor={ringColor} />
+              <Field label="Mother's Name" name="motherName" value={form.motherName} onChange={handleChange} placeholder="Enter mother's full name" ringColor={ringColor} />
+              <Field label="Father's Name" name="fatherName" value={form.fatherName} onChange={handleChange} placeholder="Enter father's full name" ringColor={ringColor} />
+              <Field label="Maternal Grandmother's Name" name="maternalGrandmother" value={form.maternalGrandmother} onChange={handleChange} placeholder="Enter mother's mother's name" ringColor={ringColor} />
+              <Field label="Maternal Grandfather's Name" name="maternalGrandfather" value={form.maternalGrandfather} onChange={handleChange} placeholder="Enter mother's father's name" ringColor={ringColor} />
+              <Field label="Paternal Grandmother's Name" name="paternalGrandmother" value={form.paternalGrandmother} onChange={handleChange} placeholder="Enter father's mother's name" ringColor={ringColor} />
+              <Field label="Paternal Grandfather's Name" name="paternalGrandfather" value={form.paternalGrandfather} onChange={handleChange} placeholder="Enter father's father's name" ringColor={ringColor} />
+              <Field label="Other" name="otherFamily" value={form.otherFamily} onChange={handleChange} placeholder="Other" ringColor={ringColor} />
             </div>
           </section>
 
@@ -210,100 +248,103 @@ export default function CreateStoryPage() {
           <section>
             <h2 className={`text-base font-semibold mb-4 ${accent}`}>Hospital Details</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Hospital / Branch" name="hospital" value={form.hospital} onChange={handleChange} placeholder="Kalyan Nagar" ringColor={ringColor} />
+              <Field label="Room Type" name="roomType" value={form.roomType} onChange={handleChange} placeholder="Deluxe Suite" ringColor={ringColor} />
+              <Field label="Check-in Date" name="checkInDate" value={form.checkInDate} onChange={handleChange} type="date" ringColor={ringColor} />
+              <Field label="Check-in Time" name="checkInTime" value={form.checkInTime} onChange={handleChange} type="time" ringColor={ringColor} />
+            </div>
+          </section>
 
-              {/* Doctors multi-add */}
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium text-gray-600">Doctors</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={doctorInput}
-                    onChange={(e) => setDoctorInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        if (doctorInput.trim()) {
-                          setForm((f) => ({ ...f, doctors: [...f.doctors, doctorInput.trim()] }));
-                          setDoctorInput("");
-                        }
-                      }
-                    }}
-                    placeholder="Dr. Name"
-                    className={`flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
+          {/* Doctors */}
+          <section>
+            <h2 className={`text-base font-semibold mb-4 ${accent}`}>Doctors</h2>
+            <div className="flex flex-col gap-1">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={doctorInput}
+                  onChange={(e) => setDoctorInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
                       if (doctorInput.trim()) {
                         setForm((f) => ({ ...f, doctors: [...f.doctors, doctorInput.trim()] }));
                         setDoctorInput("");
                       }
-                    }}
-                    className={`px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors ${isGirl ? "bg-pink-400 hover:bg-pink-500" : "bg-[#3bbfbf] hover:bg-[#2ea8a8]"}`}
-                  >
-                    Add
-                  </button>
-                </div>
-                {form.doctors.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {form.doctors.map((d, i) => (
-                      <span key={i} className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-medium ${isGirl ? "bg-pink-100 text-pink-500" : "bg-[#e8f7f7] text-[#3bbfbf]"}`}>
-                        {d}
-                        <button type="button" onClick={() => setForm((f) => ({ ...f, doctors: f.doctors.filter((_, j) => j !== i) }))} className="ml-1 hover:opacity-70">×</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
+                    }
+                  }}
+                  placeholder="Dr. Name"
+                  className={`flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (doctorInput.trim()) {
+                      setForm((f) => ({ ...f, doctors: [...f.doctors, doctorInput.trim()] }));
+                      setDoctorInput("");
+                    }
+                  }}
+                  className={`px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors ${isGirl ? "bg-pink-400 hover:bg-pink-500" : "bg-[#3bbfbf] hover:bg-[#2ea8a8]"}`}
+                >
+                  Add
+                </button>
               </div>
+              {form.doctors.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {form.doctors.map((d, i) => (
+                    <span key={i} className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-medium ${isGirl ? "bg-pink-100 text-pink-500" : "bg-[#e8f7f7] text-[#3bbfbf]"}`}>
+                      {d}
+                      <button type="button" onClick={() => setForm((f) => ({ ...f, doctors: f.doctors.filter((_, j) => j !== i) }))} className="ml-1 hover:opacity-70">×</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
 
-              {/* Nurse multi-add */}
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium text-gray-600">Nurse / Sister</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={nurseInput}
-                    onChange={(e) => setNurseInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        if (nurseInput.trim()) {
-                          setForm((f) => ({ ...f, nurse: [...f.nurse, nurseInput.trim()] }));
-                          setNurseInput("");
-                        }
-                      }
-                    }}
-                    placeholder="Sister Name"
-                    className={`flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
+          {/* Nurses */}
+          <section>
+            <h2 className={`text-base font-semibold mb-4 ${accent}`}>Nurses / Sisters</h2>
+            <div className="flex flex-col gap-1">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={nurseInput}
+                  onChange={(e) => setNurseInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
                       if (nurseInput.trim()) {
                         setForm((f) => ({ ...f, nurse: [...f.nurse, nurseInput.trim()] }));
                         setNurseInput("");
                       }
-                    }}
-                    className={`px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors ${isGirl ? "bg-pink-400 hover:bg-pink-500" : "bg-[#3bbfbf] hover:bg-[#2ea8a8]"}`}
-                  >
-                    Add
-                  </button>
-                </div>
-                {form.nurse.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {form.nurse.map((n, i) => (
-                      <span key={i} className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-medium ${isGirl ? "bg-pink-100 text-pink-500" : "bg-[#e8f7f7] text-[#3bbfbf]"}`}>
-                        {n}
-                        <button type="button" onClick={() => setForm((f) => ({ ...f, nurse: f.nurse.filter((_, j) => j !== i) }))} className="ml-1 hover:opacity-70">×</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
+                    }
+                  }}
+                  placeholder="Sister Name"
+                  className={`flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (nurseInput.trim()) {
+                      setForm((f) => ({ ...f, nurse: [...f.nurse, nurseInput.trim()] }));
+                      setNurseInput("");
+                    }
+                  }}
+                  className={`px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors ${isGirl ? "bg-pink-400 hover:bg-pink-500" : "bg-[#3bbfbf] hover:bg-[#2ea8a8]"}`}
+                >
+                  Add
+                </button>
               </div>
-              <Field label="Room Type" name="roomType" value={form.roomType} onChange={handleChange} placeholder="Deluxe Suite" ringColor={ringColor} />
-              <Field label="Check-in Date" name="checkInDate" value={form.checkInDate} onChange={handleChange} type="date" ringColor={ringColor} />
-              <Field label="Check-in Time" name="checkInTime" value={form.checkInTime} onChange={handleChange} type="time" ringColor={ringColor} />
+              {form.nurse.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {form.nurse.map((n, i) => (
+                    <span key={i} className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-medium ${isGirl ? "bg-pink-100 text-pink-500" : "bg-[#e8f7f7] text-[#3bbfbf]"}`}>
+                      {n}
+                      <button type="button" onClick={() => setForm((f) => ({ ...f, nurse: f.nurse.filter((_, j) => j !== i) }))} className="ml-1 hover:opacity-70">×</button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
 
@@ -315,19 +356,7 @@ export default function CreateStoryPage() {
               <Field label="Mother's Outfit" name="motherOutfit" value={form.motherOutfit} onChange={handleChange} placeholder="Cream gown with brown lines" ringColor={ringColor} />
             </div>
           </section>
-
-          {/* Birth Story */}
-          <section>
-            <h2 className={`text-base font-semibold mb-4 ${accent}`}>Birth Story</h2>
-            <textarea
-              name="story"
-              value={form.story}
-              onChange={handleChange}
-              rows={5}
-              placeholder="Write the birth story here..."
-              className={`w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor} resize-none`}
-            />
-          </section>
+          
 
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <Link href="/verification" className={`flex-1 text-center font-semibold rounded-lg py-2.5 transition-colors ${btnPrimary}`}>

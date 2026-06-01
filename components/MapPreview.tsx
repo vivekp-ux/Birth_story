@@ -1,51 +1,60 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-
-// Fix for default marker icon missing in Next.js / webpack builds
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
-});
+import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 
 interface Props {
   lat: number;
   lng: number;
 }
 
+const mapContainerStyle = {
+  width: "100%",
+  height: "300px",
+};
+
 export default function MapPreview({ lat, lng }: Props) {
-  // Key forces re-rendering of MapContainer when lat/lng change
-  const mapKey = `${lat}-${lng}`;
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: "ovum-google-map",
+    googleMapsApiKey: apiKey,
+  });
+
+  if (!apiKey) {
+    return (
+      <div className="w-full h-[300px] rounded-xl border border-amber-200 bg-amber-50 flex items-center justify-center text-sm text-amber-800 px-4 text-center">
+        Add <code className="mx-1">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to{" "}
+        <code className="mx-1">.env.local</code> (Maps JavaScript API enabled).
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="w-full h-[300px] rounded-xl border border-red-200 bg-red-50 flex items-center justify-center text-sm text-red-700 px-4 text-center">
+        Could not load Google Maps. Check your API key and billing on Google Cloud.
+      </div>
+    );
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="w-full h-[300px] rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center text-sm text-gray-400">
+        Loading map…
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full h-[300px] rounded-xl overflow-hidden border border-gray-200 shadow-sm relative z-0">
-      <MapContainer
-        key={mapKey}
-        center={[lat, lng]}
-        zoom={13}
-        scrollWheelZoom={false}
-        className="w-full h-full"
+    <div className="w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+      <GoogleMap
+        mapContainerStyle={mapContainerStyle}
+        center={{ lat, lng }}
+        zoom={15}
+        options={{ scrollwheel: false }}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-
-        <Marker position={[lat, lng]}>
-          <Popup>
-            <div className="text-center font-sans text-xs">
-              <strong className="text-gray-700 font-semibold">Birth Location</strong>
-              <div className="text-gray-500 mt-0.5">
-                {lat.toFixed(4)}, {lng.toFixed(4)}
-              </div>
-            </div>
-          </Popup>
-        </Marker>
-      </MapContainer>
+        <Marker position={{ lat, lng }} />
+      </GoogleMap>
     </div>
   );
 }

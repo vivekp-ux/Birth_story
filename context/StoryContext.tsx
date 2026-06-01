@@ -24,6 +24,11 @@ export interface StoryForm {
   story: string;
   grandmother: string;
   grandfather: string;
+  maternalGrandmother: string;
+  maternalGrandfather: string;
+  paternalGrandmother: string;
+  paternalGrandfather: string;
+  otherFamily: string;
   gender: "male" | "female" | "";
   storyImage: string | null;
 }
@@ -45,7 +50,10 @@ const INITIAL: StoryForm = {
   hospital: "", doctors: [], nurse: [],
   roomType: "", checkInDate: "", checkInTime: "",
   firstOutfit: "", motherOutfit: "", story: "",
-  grandmother: "", grandfather: "", gender: "", storyImage: null,
+  grandmother: "", grandfather: "",
+  maternalGrandmother: "", maternalGrandfather: "",
+  paternalGrandmother: "", paternalGrandfather: "",
+  otherFamily: "", gender: "", storyImage: null,
 };
 
 const DRAFT_KEY = "ovum_story_draft";

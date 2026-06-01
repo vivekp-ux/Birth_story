@@ -197,7 +197,7 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
       <div className="w-[1.5px] z-10" style={{ background: isFemale ? "#e8a8c6" : "#9bcfd5" }} />
 
       {/* Right story section */}
-      <div className="flex-1 px-8 py-6 overflow-hidden flex flex-col justify-center" style={{ background: isFemale ? "#f8d9ea" : "#c7e4e7" }}>
+      <div className="flex-1 px-8 py-6 overflow-hidden flex flex-col justify-center" style={{ background: isFemale ? "#f8d9ea" : "#c7e4e7", fontFamily: "var(--font-dm-sans), 'Museo Sans', sans-serif" }}>
         <div className="space-y-4 text-[12.5px] leading-[1.35] text-[#111]">
 
           <div>
@@ -242,11 +242,11 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
           <div>
             <h3 className="font-bold text-[13.5px] mb-0.5" style={{ color: headingColor }}>A Father&apos;s First Hold</h3>
             <p>Wrapped gently in soft cloth, you were placed into your father&apos;s arms for the very first time.</p>
-            {(form.grandmother || form.grandfather) && (
+            {(form.maternalGrandmother || form.maternalGrandfather || form.paternalGrandmother || form.paternalGrandfather) && (
               <p className="mt-1">
                 His joy was immeasurable as he introduced you to your loving family —{" "}
                 <span className="font-semibold" style={{ color: accentHex }}>
-                  {[form.grandmother, form.grandfather].filter(Boolean).join(", ")}
+                  {[form.maternalGrandmother, form.maternalGrandfather, form.paternalGrandmother, form.paternalGrandfather].filter(Boolean).join(", ")}
                 </span>{" "}
                 waiting excitedly to meet you.
               </p>
@@ -275,7 +275,7 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
             <h3 className="font-bold text-[13.5px] mb-0.5" style={{ color: headingColor }}>With Love, From Ovum</h3>
             <p>Your birth brought immense happiness not only to your family, but to all of us at Ovum Hospitals.</p>
             <p className="mt-1">This keepsake is a celebration of the love, joy, and hope you brought into the world.</p>
-            <p className="mt-1 font-semibold italic text-[12px] opacity-80">May your life always shine as brightly as the happiness you brought on your very first day.</p>
+            <p className="mt-1 ">May your life always shine as brightly as the happiness you brought on your very first day.</p>
           </div>
 
         </div>

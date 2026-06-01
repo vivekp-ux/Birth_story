@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { Geist, Great_Vibes } from "next/font/google";
+import { Geist, Great_Vibes, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { StoryProvider } from "@/context/StoryContext";
 
 const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const dmSans = DM_Sans({ variable: "--font-dm-sans", subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 const greatVibes = Great_Vibes({
   weight: "400",
   variable: "--font-great-vibes",
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geist.variable} ${greatVibes.variable}`}>
+    <html lang="en" className={`${geist.variable} ${greatVibes.variable} ${dmSans.variable}`}>
       <body
         className="min-h-screen font-sans antialiased"
         style={{
