@@ -54,8 +54,8 @@ export default function VerificationPage() {
                   ["Birth Weight", form.birthWeight ? form.birthWeight + " kg" : "—"],
                   ["Height", form.height ? form.height + " cm" : "—"],
                   ["First Cry Time", form.firstCryTime || "—"],
-                  ["Latitude", form.latitude || "—"],
-                  ["Longitude", form.longitude || "—"],
+                  ["Latitude", form.latitude ? `${form.latitude}° N` : "—"],
+                  ["Longitude", form.longitude ? `${form.longitude}° E` : "—"],
                 ].map(([label, value]) => (
                   <div key={label} className="flex justify-between items-center border-b border-gray-100 pb-2">
                     <dt className="font-semibold text-gray-600">{label}</dt>

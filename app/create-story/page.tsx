@@ -3,44 +3,110 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { useStory } from "@/context/StoryContext";
+const formatCoordinates = (lat: string, lng: string) =>
+  `${lat}° N, ${lng}° E`;
 
-const MapPreview = dynamic(() => import("@/components/MapPreview"), {
-  ssr: false,
-  loading: () => (
-    <div className="w-full h-[300px] rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center text-sm text-gray-400">
-      Loading map…
-    </div>
-  ),
-});
+const toTitleCase = (str: string) =>
+  str.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 
-const BRANCHES = [
-  { name: "Banashankari (Bangalore)",   lat: "12.9248", lng: "77.5401" },
-  { name: "HSR Layout (Bangalore)",     lat: "12.9103", lng: "77.6432" },
-  { name: "Kalyan Nagar (Bangalore)",   lat: "13.0221", lng: "77.6494" },
-  { name: "Hennur Road (Bangalore)",    lat: "13.0538", lng: "77.6398" },
-  { name: "Bhattarahalli (Bangalore)",  lat: "13.0242", lng: "77.7126" },
-  { name: "Budigere Cross (Bangalore)", lat: "13.0505", lng: "77.7411" },
-  { name: "Hoskote (Bangalore Rural)",  lat: "13.0691", lng: "77.7981" },
-  { name: "Hosur (Tamil Nadu)",         lat: "12.7364", lng: "77.8322" },
+const capitalizedFields = [
+  "babyName", "motherName", "fatherName",
+  "maternalGrandmother", "maternalGrandfather",
+  "paternalGrandmother", "paternalGrandfather",
+  "otherFamily", "firstOutfit", "motherOutfit", "roomType",
 ];
 
-function Field({ label, name, value, onChange, type = "text", placeholder = "", ringColor = "focus:ring-[#3bbfbf]" }: {
+// These fields only allow letters and spaces
+const nameOnlyFields = [
+  "babyName", "motherName", "fatherName",
+  "maternalGrandmother", "maternalGrandfather",
+  "paternalGrandmother", "paternalGrandfather",
+  "otherFamily",
+];
+
+const BRANCHES = [
+  { name: "Banashankari ",   lat: "12.9248", lng: "77.5401" },
+  { name: "HSR Layout ",     lat: "12.9103", lng: "77.6432" },
+  { name: "Kalyan Nagar ",   lat: "13.0221", lng: "77.6494" },
+  { name: "Hennur Road ",    lat: "13.0538", lng: "77.6398" },
+  { name: "Bhattarahalli ",  lat: "13.0242", lng: "77.7126" },
+  { name: "Budigere Cross ", lat: "13.0505", lng: "77.7411" },
+  { name: "Hoskote ",  lat: "13.0691", lng: "77.7981" },
+  { name: "Hosur",         lat: "12.7364", lng: "77.8322" },
+];
+
+function Field({ label, name, value, onChange, type = "text", placeholder = "", ringColor = "focus:ring-[#3bbfbf]", error = false }: {
   label: string; name: string; value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  type?: string; placeholder?: string; ringColor?: string;
+  type?: string; placeholder?: string; ringColor?: string; error?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm font-medium text-gray-600">{label}</label>
+      <label className="text-sm font-medium text-gray-600">{label}{error && <span className="text-red-500 ml-1">*</span>}</label>
       <input
         type={type}
         name={name}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className={`border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor}`}
+        className={`border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor} ${error ? "border-red-400 placeholder-red-300 bg-red-50" : "border-gray-200"}`}
       />
+    </div>
+  );
+}
+
+function TimeSelect({ label, value, onChange, ringColor = "focus:ring-[#3bbfbf]" }: {
+  label: string; value: string;
+  onChange: (time: string) => void;
+  ringColor?: string;
+}) {
+  // Parse existing value like "4:22 PM" or ""
+  const parts = value.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  const initHour = parts ? parts[1] : "12";
+  const initMin = parts ? parts[2] : "00";
+  const initAmpm = parts ? parts[3].toUpperCase() : "AM";
+
+  const [hour, setHour] = useState(initHour);
+  const [minute, setMinute] = useState(initMin);
+  const [ampm, setAmpm] = useState(initAmpm);
+
+  const emit = (h: string, m: string, a: string) => onChange(`${h}:${m} ${a}`);
+
+  const selectClass = `border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor} bg-white`;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-sm font-medium text-gray-600">{label}</label>
+      <div className="flex gap-2">
+        <select
+          value={hour}
+          onChange={(e) => { setHour(e.target.value); emit(e.target.value, minute, ampm); }}
+          className={`flex-1 ${selectClass}`}
+        >
+          {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((h) => (
+            <option key={h} value={h}>{h}</option>
+          ))}
+        </select>
+        <select
+          value={minute}
+          onChange={(e) => { setMinute(e.target.value); emit(hour, e.target.value, ampm); }}
+          className={`flex-1 ${selectClass}`}
+        >
+          {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+        <select
+          value={ampm}
+          onChange={(e) => { setAmpm(e.target.value); emit(hour, minute, e.target.value); }}
+          className={`w-20 ${selectClass}`}
+        >
+          <option value="AM">AM</option>
+          <option value="PM">PM</option>
+        </select>
+      </div>
     </div>
   );
 }
@@ -50,6 +116,8 @@ export default function CreateStoryPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [doctorInput, setDoctorInput] = useState("");
   const [nurseInput, setNurseInput] = useState("");
+  const [showErrors, setShowErrors] = useState(false);
+  const router = useRouter();
 
   const isBoy = form.gender === "male";
   const isGirl = form.gender === "female";
@@ -79,7 +147,36 @@ export default function CreateStoryPage() {
   const uploadText = isGirl ? "text-pink-400" : "text-[#3bbfbf]";
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    // Name fields: letters and spaces only
+    const cleaned = nameOnlyFields.includes(name) ? value.replace(/[^a-zA-Z\s]/g, "") : value;
+    setForm((f) => ({
+      ...f,
+      [name]: capitalizedFields.includes(name) ? toTitleCase(cleaned) : cleaned,
+    }));
+  };
+
+  const requiredFields = {
+    babyName: form.babyName,
+    motherName: form.motherName,
+    fatherName: form.fatherName,
+    hospital: form.hospital,
+  };
+  const hasDoctor = form.doctors.length > 0;
+  const hasNurse = form.nurse.length > 0;
+
+  const missingFields = [
+    ...Object.entries(requiredFields).filter(([, v]) => !v.trim()).map(([k]) => k),
+    ...(!hasDoctor ? ["doctors"] : []),
+    ...(!hasNurse ? ["nurse"] : []),
+  ];
+
+  const handlePreview = () => {
+    if (missingFields.length > 0) {
+      setShowErrors(true);
+      return;
+    }
+    router.push("/verification");
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -181,27 +278,61 @@ export default function CreateStoryPage() {
               </div>
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {[
-                  { label: "Baby Name", name: "babyName", placeholder: "Baby's name" },
-                  { label: "Birth Date", name: "birthDate", type: "date" },
-                  { label: "Birth Time", name: "birthTime", type: "time" },
-                  { label: "First Cry Time", name: "firstCryTime", type: "time" },
-                  { label: "Birth Weight (kg)", name: "birthWeight", placeholder: "2.8" },
-                  { label: "Height (cm)", name: "height", placeholder: "49" },
-                  { label: "Latitude", name: "latitude", placeholder: "13.0216" },
-                  { label: "Longitude", name: "longitude", placeholder: "77.6423" },
-                ].map(({ label, name, type, placeholder }) => (
+                  { label: "Baby Name", name: "babyName", placeholder: "Baby's name", required: true },
+                  { label: "Birth Date", name: "birthDate", type: "date", required: false },
+                  { label: "Birth Weight (kg)", name: "birthWeight", placeholder: "2.8", type: "number", required: false },
+                  { label: "Height (cm)", name: "height", placeholder: "49", type: "number", required: false },
+                ].map(({ label, name, type, placeholder, required }) => {
+                  const hasError = showErrors && required && !(form[name as keyof typeof form] as string)?.trim();
+                  return (
                   <div key={name} className="flex flex-col gap-1">
-                    <label className="text-sm font-medium text-gray-600">{label}</label>
+                    <label className="text-sm font-medium text-gray-600">{label}{hasError && <span className="text-red-500 ml-1">*</span>}</label>
                     <input
                       type={type || "text"}
                       name={name}
                       value={form[name as keyof typeof form] as string}
                       onChange={handleChange}
                       placeholder={placeholder || ""}
-                      className={`border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor}`}
+                      className={`border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor} ${hasError ? "border-red-400 placeholder-red-300 bg-red-50" : "border-gray-200"}`}
                     />
                   </div>
-                ))}
+                  );
+                })}
+
+                <TimeSelect label="Birth Time" value={form.birthTime} onChange={(t) => setForm((f) => ({ ...f, birthTime: t }))} ringColor={ringColor} />
+                <TimeSelect label="First Cry Time" value={form.firstCryTime} onChange={(t) => setForm((f) => ({ ...f, firstCryTime: t }))} ringColor={ringColor} />
+
+                {/* Latitude with ° N suffix */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-gray-600">Latitude</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="latitude"
+                      value={form.latitude}
+                      onChange={handleChange}
+                      placeholder="13.0216"
+                      className={`w-full border border-gray-200 rounded-lg px-4 py-2.5 pr-12 text-sm focus:outline-none focus:ring-2 ${ringColor}`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">° N</span>
+                  </div>
+                </div>
+
+                {/* Longitude with ° E suffix */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-gray-600">Longitude</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="longitude"
+                      value={form.longitude}
+                      onChange={handleChange}
+                      placeholder="77.6423"
+                      className={`w-full border border-gray-200 rounded-lg px-4 py-2.5 pr-12 text-sm focus:outline-none focus:ring-2 ${ringColor}`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">° E</span>
+                  </div>
+                </div>
 
                 {/* Branch dropdown — auto-fills lat/lng */}
                 <div className="flex flex-col gap-1 sm:col-span-2">
@@ -234,8 +365,8 @@ export default function CreateStoryPage() {
           <section>
             <h2 className={`text-base font-semibold mb-4 ${accent}`}>Family</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Mother's Name" name="motherName" value={form.motherName} onChange={handleChange} placeholder="Enter mother's full name" ringColor={ringColor} />
-              <Field label="Father's Name" name="fatherName" value={form.fatherName} onChange={handleChange} placeholder="Enter father's full name" ringColor={ringColor} />
+              <Field label="Mother's Name" name="motherName" value={form.motherName} onChange={handleChange} placeholder="Enter mother's full name" ringColor={ringColor} error={showErrors && !form.motherName.trim()} />
+              <Field label="Father's Name" name="fatherName" value={form.fatherName} onChange={handleChange} placeholder="Enter father's full name" ringColor={ringColor} error={showErrors && !form.fatherName.trim()} />
               <Field label="Maternal Grandmother's Name" name="maternalGrandmother" value={form.maternalGrandmother} onChange={handleChange} placeholder="Enter mother's mother's name" ringColor={ringColor} />
               <Field label="Maternal Grandfather's Name" name="maternalGrandfather" value={form.maternalGrandfather} onChange={handleChange} placeholder="Enter mother's father's name" ringColor={ringColor} />
               <Field label="Paternal Grandmother's Name" name="paternalGrandmother" value={form.paternalGrandmother} onChange={handleChange} placeholder="Enter father's mother's name" ringColor={ringColor} />
@@ -250,19 +381,21 @@ export default function CreateStoryPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Room Type" name="roomType" value={form.roomType} onChange={handleChange} placeholder="Deluxe Suite" ringColor={ringColor} />
               <Field label="Check-in Date" name="checkInDate" value={form.checkInDate} onChange={handleChange} type="date" ringColor={ringColor} />
-              <Field label="Check-in Time" name="checkInTime" value={form.checkInTime} onChange={handleChange} type="time" ringColor={ringColor} />
+              <TimeSelect label="Check-in Time" value={form.checkInTime} onChange={(t) => setForm((f) => ({ ...f, checkInTime: t }))} ringColor={ringColor} />
             </div>
           </section>
 
           {/* Doctors */}
           <section>
-            <h2 className={`text-base font-semibold mb-4 ${accent}`}>Doctors</h2>
+            <h2 className={`text-base font-semibold mb-4 ${accent}`}>
+              Doctors{showErrors && !hasDoctor && <span className="text-red-500 ml-1 text-sm font-normal">* Required</span>}
+            </h2>
             <div className="flex flex-col gap-1">
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={doctorInput}
-                  onChange={(e) => setDoctorInput(e.target.value)}
+                  onChange={(e) => setDoctorInput("Dr. " + toTitleCase(e.target.value.replace(/^Dr\.\s*/i, "")))}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -273,7 +406,7 @@ export default function CreateStoryPage() {
                     }
                   }}
                   placeholder="Dr. Name"
-                  className={`flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor}`}
+                  className={`flex-1 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor} ${showErrors && !hasDoctor ? "border-red-400 placeholder-red-300 bg-red-50" : "border-gray-200"}`}
                 />
                 <button
                   type="button"
@@ -303,7 +436,9 @@ export default function CreateStoryPage() {
 
           {/* Nurses */}
           <section>
-            <h2 className={`text-base font-semibold mb-4 ${accent}`}>Nurses / Sisters</h2>
+            <h2 className={`text-base font-semibold mb-4 ${accent}`}>
+              Nurses / Sisters{showErrors && !hasNurse && <span className="text-red-500 ml-1 text-sm font-normal">* Required</span>}
+            </h2>
             <div className="flex flex-col gap-1">
               <div className="flex gap-2">
                 <input
@@ -320,7 +455,7 @@ export default function CreateStoryPage() {
                     }
                   }}
                   placeholder="Sister Name"
-                  className={`flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor}`}
+                  className={`flex-1 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor} ${showErrors && !hasNurse ? "border-red-400 placeholder-red-300 bg-red-50" : "border-gray-200"}`}
                 />
                 <button
                   type="button"
@@ -359,9 +494,14 @@ export default function CreateStoryPage() {
           
 
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <Link href="/verification" className={`flex-1 text-center font-semibold rounded-lg py-2.5 transition-colors ${btnPrimary}`}>
+           
+            <button
+              type="button"
+              onClick={handlePreview}
+              className={`flex-1 text-center font-semibold rounded-lg py-2.5 transition-colors ${btnPrimary}`}
+            >
               Preview Story
-            </Link>
+            </button>
             <button
               type="button"
               onClick={saveDraft}

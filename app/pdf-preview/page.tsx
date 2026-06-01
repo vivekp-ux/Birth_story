@@ -3,6 +3,18 @@ import Link from "next/link";
 import Image from "next/image";
 import { useStory, StoryForm } from "@/context/StoryContext";
 
+// Formats "2026-05-09" → "9th May 2026"
+function formatDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return dateStr;
+  const day = d.getDate();
+  const suffix = ["th","st","nd","rd"][((day % 100) - 20) % 10] ?? ["th","st","nd","rd"][day % 100] ?? "th";
+  const month = d.toLocaleString("en-GB", { month: "long" });
+  const year = d.getFullYear();
+  return `${day}${suffix} ${month} ${year}`;
+}
+
 export default function PdfPreviewPage() {
   const { form, babyImage, clearDraft } = useStory();
   const accentHex = form.gender === "female" ? "#e01a8b" : "#0da1b8";
@@ -115,14 +127,14 @@ function PageInside({ form, accentHex }: { form: StoryForm; accentHex: string })
             <div>
               <p className="font-semibold text-[13px] text-[#111]">Latitude:</p>
               <p className="font-bold text-[15px]" style={{ color: accentHex }}>
-                {form.latitude || "—"}
+                {form.latitude ? `${form.latitude}° N` : "—"}
               </p>
             </div>
 
             <div>
               <p className="font-semibold text-[13px] text-[#111]">Longitude:</p>
               <p className="font-bold text-[15px]" style={{ color: accentHex }}>
-                {form.longitude || "—"}
+                {form.longitude ? `${form.longitude}° E` : "—"}
               </p>
             </div>
 
@@ -197,41 +209,68 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
       <div className="w-[1.5px] z-10" style={{ background: isFemale ? "#e8a8c6" : "#9bcfd5" }} />
 
       {/* Right story section */}
-      <div className="flex-1 px-8 py-6 overflow-hidden flex flex-col justify-center" style={{ background: isFemale ? "#f8d9ea" : "#c7e4e7", fontFamily: "var(--font-dm-sans), 'Museo Sans', sans-serif" }}>
-        <div className="space-y-4 text-[12.5px] leading-[1.35] text-[#111]">
+      <div
+        className="flex-1 flex items-center justify-center"
+        style={{
+          background: isFemale ? "#f8d9ea" : "#c7e4e7",
+          fontFamily: "var(--font-dm-sans), 'Museo Sans', sans-serif",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            paddingTop: "12px",
+            paddingBottom: "28px",
+            paddingLeft: "65px",
+            paddingRight: "60px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            boxSizing: "border-box",
+          }}
+        >
+          <div
+            className="space-y-3"
+            style={{ fontSize: "14px", lineHeight: "1.28", color: "hsla(0, 0%, 0%, 1.00)" }}
+          >
 
           <div>
-            <h3 className="font-bold text-[13.5px] mb-0.5" style={{ color: headingColor }}>The First Cry</h3>
-            <p>
+            <h3 className="font-bold " style={{ fontSize: "13px", lineHeight: "1.1" }}>The First Cry</h3>
+            <p style={{ marginTop: "1px", marginBottom: "1px" }}>
               Your mother,{" "}
               <span className="font-semibold" style={{ color: accentHex }}>{form.motherName || "your mother"}</span>,
               had tears of joy in her eyes when she heard your very first cry on{" "}
               {form.birthDate && (
                 <span className="font-semibold" style={{ color: accentHex }}>
-                  {form.birthDate}{form.birthTime && ` at ${form.birthTime}`}
+                  {formatDate(form.birthDate)}{form.birthTime && ` at ${form.birthTime}`}
                 </span>
               )}.
             </p>
-            <p>That beautiful moment marked the beginning of your journey.</p>
+            <p style={{ marginTop: "1px", marginBottom: "1px" }}>That beautiful moment marked the beginning of your journey.</p>
           </div>
 
           <div>
-            <h3 className="font-bold text-[13.5px] mb-0.5" style={{ color: headingColor }}>Welcomed With Love</h3>
-            <p>
+            <h3 className="font-bold " style={{ fontSize: "13px", lineHeight: "1.1" }}>Welcomed With Love</h3>
+            <p style={{ marginTop: "1px", marginBottom: "1px" }}>
               You were delivered at Ovum Hospitals,{" "}
               {form.hospital && <span className="font-semibold" style={{ color: accentHex }}>{form.hospital}</span>},
               surrounded by love and care.
             </p>
+
+            <br />
             {form.doctors.length > 0 && (
-              <p className="mt-1">
+              <p style={{ marginTop: "1px", marginBottom: "1px" }}>
                 Your mother&apos;s trusted doctors,{" "}
                 <span className="font-semibold" style={{ color: accentHex }}>{form.doctors.join(", ")}</span>,
                 stood beside her along with your father,{" "}
                 {form.fatherName && <span className="font-semibold" style={{ color: accentHex }}>{form.fatherName}</span>}.
               </p>
             )}
+
+            <br />
             {form.nurse.length > 0 && (
-              <p className="mt-1">
+              <p style={{ marginTop: "1px", marginBottom: "1px" }}>
                 Sister{" "}
                 <span className="font-semibold" style={{ color: accentHex }}>{form.nurse.join(", ")}</span>{" "}
                 and her nursing team cared for you with warmth and devotion.
@@ -240,10 +279,10 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
           </div>
 
           <div>
-            <h3 className="font-bold text-[13.5px] mb-0.5" style={{ color: headingColor }}>A Father&apos;s First Hold</h3>
-            <p>Wrapped gently in soft cloth, you were placed into your father&apos;s arms for the very first time.</p>
+            <h3 className="font-bold " style={{ fontSize: "13px", lineHeight: "1.1" }}>A Father&apos;s First Hold</h3>
+            <p style={{ marginTop: "1px", marginBottom: "1px" }}>Wrapped gently in soft cloth, you were placed into your father&apos;s arms for the very first time.</p><br />
             {(form.maternalGrandmother || form.maternalGrandfather || form.paternalGrandmother || form.paternalGrandfather) && (
-              <p className="mt-1">
+              <p style={{ marginTop: "1px", marginBottom: "1px" }}>
                 His joy was immeasurable as he introduced you to your loving family —{" "}
                 <span className="font-semibold" style={{ color: accentHex }}>
                   {[form.maternalGrandmother, form.maternalGrandfather, form.paternalGrandmother, form.paternalGrandfather].filter(Boolean).join(", ")}
@@ -255,16 +294,19 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
 
           {form.roomType && (
             <div>
-              <h3 className="font-bold text-[13.5px] mb-0.5" style={{ color: headingColor }}>A Room Filled With Happiness</h3>
-              <p>
+              <h3 className="font-bold " style={{ fontSize: "13px", lineHeight: "1.1" }}>A Room Filled With Happiness</h3>
+              <p style={{ marginTop: "1px", marginBottom: "1px" }}>
                 To celebrate your arrival, you were welcomed into the{" "}
                 <span className="font-semibold" style={{ color: accentHex }}>{form.roomType}</span>{" "}
                 chosen lovingly by your mother, decorated with balloons and colorful ribbons.
+          
               </p>
+
+              <br />
               {form.checkInDate && (
-                <p className="mt-1">
+                <p style={{ marginTop: "1px", marginBottom: "1px" }}>
                   <span className="font-semibold" style={{ color: accentHex }}>
-                    On {form.checkInDate}{form.checkInTime && ` at ${form.checkInTime}`}
+                    On {formatDate(form.checkInDate)}{form.checkInTime && ` at ${form.checkInTime}`}
                   </span>, your family settled in for a beautiful stay filled with unforgettable memories.
                 </p>
               )}
@@ -272,12 +314,13 @@ function PageStory({ form, accentHex, storyImage }: { form: StoryForm; accentHex
           )}
 
           <div>
-            <h3 className="font-bold text-[13.5px] mb-0.5" style={{ color: headingColor }}>With Love, From Ovum</h3>
-            <p>Your birth brought immense happiness not only to your family, but to all of us at Ovum Hospitals.</p>
-            <p className="mt-1">This keepsake is a celebration of the love, joy, and hope you brought into the world.</p>
-            <p className="mt-1 ">May your life always shine as brightly as the happiness you brought on your very first day.</p>
+            <h3 className="font-bold " style={{ fontSize: "13px", lineHeight: "1.1" }}>With Love, From Ovum</h3>
+            <p style={{ marginTop: "1px", marginBottom: "1px" }}>Your birth brought immense happiness not only to your family, but to all of us at Ovum Hospitals.</p><br />
+            <p style={{ marginTop: "1px", marginBottom: "1px" }}>This keepsake is a celebration of the love, joy, and hope you brought into the world.</p><br />
+            <p style={{ marginTop: "1px", marginBottom: "1px" }}>May your life always shine as brightly as the happiness you brought on your very first day.</p>
           </div>
 
+          </div>
         </div>
       </div>
     </div>
