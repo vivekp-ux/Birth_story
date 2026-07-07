@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,12 +17,21 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    // TODO: wire up your auth provider here
-    // Placeholder: accept any non-empty credentials
-    if (email && password) {
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        setError(signInError.message);
+        setLoading(false);
+        return;
+      }
+
       router.push("/dashboard");
-    } else {
-      setError("Please enter your email and password.");
+    } catch (err: any) {
+      setError(err?.message || "An unexpected error occurred.");
       setLoading(false);
     }
   };

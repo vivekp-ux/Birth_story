@@ -1,88 +1,582 @@
 "use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { Story, UserProfile, PdfVersion } from "@/types/story";
+import { fetchStories, getCurrentUserProfile, fetchPdfVersions } from "@/services/stories";
+
+type StatusFilter = "All" | "Draft" | "Completed" | "Archived";
+
+// Formats "2026-05-09" → "9th May 2026"
+function formatDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return dateStr;
+  const day = d.getDate();
+  const suffix = ["th","st","nd","rd"][((day % 100) - 20) % 10] ?? ["th","st","nd","rd"][day % 100] ?? "th";
+  const month = d.toLocaleString("en-GB", { month: "long" });
+  const year = d.getFullYear();
+  return `${day}${suffix} ${month} ${year}`;
+}
+
+function formatDateTime(isoStr: string): string {
+  if (!isoStr) return "—";
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/* ── Icon components ── */
+function IconEdit() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+      <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z" />
+      <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z" />
+    </svg>
+  );
+}
+
+function IconEye() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+      <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
+      <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function IconHistory() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function IconPdf() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+      <path fillRule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm4.75 6.75a.75.75 0 011.5 0v2.546l.943-1.048a.75.75 0 111.114 1.004l-2.25 2.5a.75.75 0 01-1.114 0l-2.25-2.5a.75.75 0 111.114-1.004l.943 1.048V8.75z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function IconTrash() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+      <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+/* ── Skeleton row ── */
+function SkeletonRow() {
+  return (
+    <tr className="animate-pulse border-b border-gray-100">
+      {[1,2,3,4,5,6,7].map((i) => (
+        <td key={i} className="py-4 px-4">
+          <div className="h-3.5 bg-gray-100 rounded-full w-3/4" />
+        </td>
+      ))}
+    </tr>
+  );
+}
 
 export default function DashboardPage() {
   const router = useRouter();
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [stories, setStories] = useState<Story[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const [activeHistoryStory, setActiveHistoryStory] = useState<{ id: string; name: string } | null>(null);
 
-  const handleSignOut = () => {
-    // TODO: clear auth state when auth provider is wired up
+  useEffect(() => {
+    const checkAuthAndLoad = async () => {
+      setLoading(true);
+      try {
+        const profile = await getCurrentUserProfile();
+        if (!profile) { router.push("/login"); return; }
+        setUserProfile(profile);
+        const data = await fetchStories();
+        setStories(data);
+      } catch (err) {
+        console.error("Auth / Load stories error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkAuthAndLoad();
+  }, []);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
     router.push("/login");
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this birth story? This action cannot be undone.")) return;
+
+    try {
+      // Verify we have a valid user first, then get the session token
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw new Error("Not authenticated — please sign in again.");
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("Session expired — please sign in again.");
+
+      const res = await fetch(`/api/delete-story?id=${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        console.error("Delete API error:", res.status, body);
+        throw new Error(body.error || `Delete failed (${res.status})`);
+      }
+
+      // Successfully deleted — remove from local state
+      setStories((prev) => prev.filter((s) => s.id !== id));
+    } catch (err: unknown) {
+      console.error("Delete error:", err);
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      alert(`Failed to delete: ${msg}`);
+    }
+  };
+
+  const stats = {
+    total: stories.length,
+    draft: stories.filter((s) => s.status === "Draft").length,
+    completed: stories.filter((s) => s.status === "Completed").length,
+  };
+
+  // Filter by search + status tab
+  const filteredStories = stories.filter((s) => {
+    const query = searchQuery.toLowerCase();
+    const matchesSearch =
+      (s.baby_name || "").toLowerCase().includes(query) ||
+      (s.mother_name || "").toLowerCase().includes(query) ||
+      (s.hospital || "").toLowerCase().includes(query) ||
+      (s.doctor_names || []).join(" ").toLowerCase().includes(query) ||
+      (s.birth_date ? formatDate(s.birth_date).toLowerCase() : "").includes(query);
+
+    const matchesStatus = statusFilter === "All" || s.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const isAdmin = userProfile?.role === "ADMIN";
+
+  const statCards = [
+    {
+      label: "Total Stories",
+      count: stats.total,
+      filter: "All" as StatusFilter,
+      color: "from-[#e0f7f7] to-[#bbf0f0]",
+      text: "text-[#1d7b7b]",
+      ring: "ring-[#3bbfbf]",
+    },
+    {
+      label: "Draft Stories",
+      count: stats.draft,
+      filter: "Draft" as StatusFilter,
+      color: "from-[#fff3e0] to-[#ffe0b2]",
+      text: "text-[#e65100]",
+      ring: "ring-amber-400",
+    },
+    {
+      label: "Completed Booklets",
+      count: stats.completed,
+      filter: "Completed" as StatusFilter,
+      color: "from-[#e8f5e9] to-[#c8e6c9]",
+      text: "text-[#2e7d32]",
+      ring: "ring-emerald-400",
+    },
+  ];
+
   return (
-    <div className="min-h-screen">
-      <header className="bg-white shadow-sm px-4 sm:px-8 py-4 flex items-center justify-between">
+    <div className="min-h-screen flex flex-col font-sans bg-gray-50/50">
+      {/* Header */}
+      <header className="bg-white/80 backdrop-blur-md shadow-sm px-6 sm:px-8 py-4 flex items-center justify-between sticky top-0 z-10 border-b border-gray-100">
         <Image src="/logo.png" alt="Ovum Hospital" width={120} height={44} className="object-contain" />
-        <button
-          onClick={handleSignOut}
-          className="text-sm text-gray-500 hover:text-red-500 transition-colors"
-        >
-          Sign Out
-        </button>
+        <div className="flex items-center gap-4">
+          {userProfile && (
+            <div className="flex flex-col items-end">
+              <span className="text-xs font-semibold text-gray-600">{userProfile.name}</span>
+              <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${
+                isAdmin
+                  ? "bg-purple-50 border-purple-200 text-purple-700"
+                  : "bg-teal-50 border-teal-200 text-teal-700"
+              }`}>
+                {userProfile.role}
+              </span>
+            </div>
+          )}
+          <button
+            onClick={handleSignOut}
+            className="text-xs font-semibold px-4 py-2 text-gray-600 hover:text-red-500 border border-gray-200 rounded-lg hover:border-red-200 transition-all hover:bg-red-50/40"
+          >
+            Sign Out
+          </button>
+        </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-8 py-10">
-        <h2 className="text-2xl font-semibold text-gray-800 mb-2">Welcome back</h2>
-        <p className="text-gray-500 mb-8">Create and manage birth story booklets.</p>
+      <main className="max-w-7xl mx-auto w-full px-4 sm:px-8 py-8 flex-1 flex flex-col gap-6">
+        {/* Welcome */}
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Welcome Back, {userProfile?.name || "…"}!</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Create, review, and print birth story keepsakes for newborn mothers.</p>
+        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        {/* Stat Cards — clickable filters */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          {statCards.map((stat) => {
+            const isActive = statusFilter === stat.filter;
+            return (
+              <button
+                key={stat.filter}
+                onClick={() => setStatusFilter(stat.filter)}
+                className={`bg-gradient-to-br ${stat.color} rounded-2xl p-6 shadow-sm flex flex-col justify-between border text-left transition-all duration-150 ${
+                  isActive
+                    ? `ring-2 ${stat.ring} border-transparent shadow-md scale-[1.02]`
+                    : "border-white/40 hover:scale-[1.01] hover:shadow"
+                }`}
+              >
+                <span className="text-sm font-semibold text-gray-600">{stat.label}</span>
+                <span className={`text-4xl font-extrabold mt-3 ${stat.text}`}>
+                  {loading ? <span className="inline-block w-8 h-8 bg-white/60 rounded-lg animate-pulse" /> : stat.count}
+                </span>
+                {isActive && (
+                  <span className="text-[10px] font-bold text-gray-500 mt-2 uppercase tracking-wider">Filtered ↓</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Search + New Story */}
+        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-white/95 backdrop-blur-sm p-4 sm:px-6 rounded-2xl shadow border border-gray-100">
+          {/* Search */}
+          <div className="flex-1 relative">
+            <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-4 h-4 text-gray-400">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.637 10.637z" />
+              </svg>
+            </span>
+            <input
+              type="text"
+              id="dashboard-search"
+              placeholder="Search by baby name, mother, doctor or hospital…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3bbfbf] bg-gray-50/50"
+            />
+          </div>
+
+          {/* Status filter tabs */}
+          <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+            {(["All", "Draft", "Completed"] as StatusFilter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setStatusFilter(f)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  statusFilter === f
+                    ? "bg-white text-gray-800 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+
           <Link
             href="/create-story"
-            className="bg-white rounded-2xl shadow p-6 hover:shadow-md transition-shadow flex flex-col gap-3 border border-transparent hover:border-[#3bbfbf]"
+            className="bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white text-sm font-semibold rounded-xl px-5 py-2.5 flex items-center justify-center gap-2 shadow-sm hover:shadow transition-all whitespace-nowrap"
           >
-            <div className="w-10 h-10 rounded-full bg-[#e8f7f7] flex items-center justify-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#3bbfbf"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <path d="M12 5v14" />
-                <path d="M5 12h14" />
-              </svg>
-            </div>
-            <h3 className="font-semibold text-gray-800">Create New Story</h3>
-            <p className="text-sm text-gray-500">
-              Fill in birth details and generate a personalised booklet.
-            </p>
-          </Link>
-
-          <Link
-            href="/pdf-preview"
-            className="bg-white rounded-2xl shadow p-6 hover:shadow-md transition-shadow flex flex-col gap-3 border border-transparent hover:border-[#3bbfbf]"
-          >
-            <div className="w-10 h-10 rounded-full bg-[#e8f7f7] flex items-center justify-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#3bbfbf"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <path d="M6 2h9l5 5v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" />
-                <path d="M14 2v6h6" />
-                <path d="M8 13h8" />
-                <path d="M8 17h6" />
-              </svg>
-            </div>
-            <h3 className="font-semibold text-gray-800">
-              Preview &amp; Print
-            </h3>
-            <p className="text-sm text-gray-500">
-              Preview the birth story booklet and download as PDF.
-            </p>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            New Story
           </Link>
         </div>
+
+        {/* Table */}
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow border border-gray-100 overflow-hidden flex-1">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50 border-b-2 border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                  <th className="py-3.5 px-5">
+                    <span className="flex items-center gap-1.5">
+                      Baby
+                      {/* gender legend */}
+                      <span className="flex items-center gap-1 font-normal normal-case text-[10px] text-gray-400 ml-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" title="Boy" />
+                        <span className="hidden sm:inline">Boy</span>
+                        <span className="w-2 h-2 rounded-full bg-pink-400 inline-block ml-1" title="Girl" />
+                        <span className="hidden sm:inline">Girl</span>
+                      </span>
+                    </span>
+                  </th>
+                  <th className="py-3.5 px-5">Mother</th>
+                  <th className="py-3.5 px-5">Doctor</th>
+                  <th className="py-3.5 px-5">Birth Date</th>
+                  <th className="py-3.5 px-5">Created</th>
+                  <th className="py-3.5 px-5">Status</th>
+                  <th className="py-3.5 px-5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-sm">
+                {loading ? (
+                  Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} />)
+                ) : filteredStories.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-16 text-center">
+                      <div className="flex flex-col items-center gap-3 text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-12 h-12 text-gray-200">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                        </svg>
+                        <p className="font-semibold text-gray-500">
+                          {searchQuery ? `No stories matching "${searchQuery}"` : `No ${statusFilter === "All" ? "" : statusFilter + " "}stories yet`}
+                        </p>
+                        <p className="text-xs">
+                          {searchQuery
+                            ? "Try a different search term or clear the filter."
+                            : "Click \"New Story\" to create your first birth story keepsake."}
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredStories.map((story) => {
+                    const isFemale = story.gender === "female";
+                    const isCompleted = story.status === "Completed";
+                    const babyName = story.baby_name?.trim() || "";
+                    const displayName = babyName || "Untitled Draft";
+
+                    return (
+                      <tr key={story.id} className="hover:bg-[#f0fbfb] transition-colors group">
+                        {/* Baby Name */}
+                        <td className="py-3.5 px-5 font-semibold text-gray-800">
+                          <div className="flex items-center gap-2">
+                            <span
+                              title={isFemale ? "Girl" : "Boy"}
+                              className={`w-2.5 h-2.5 rounded-full shrink-0 ${isFemale ? "bg-pink-400" : "bg-blue-400"}`}
+                            />
+                            <span className={!babyName ? "text-gray-400 italic font-normal" : ""}>
+                              {displayName}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Mother */}
+                        <td className="py-3.5 px-5 text-gray-600">
+                          {story.mother_name || <span className="text-gray-300">—</span>}
+                        </td>
+
+                        {/* Doctor */}
+                        <td className="py-3.5 px-5 text-gray-500 max-w-[160px] truncate" title={story.doctor_names?.join(", ")}>
+                          {story.doctor_names && story.doctor_names.length > 0
+                            ? story.doctor_names.join(", ")
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+
+                        {/* Birth Date */}
+                        <td className="py-3.5 px-5 text-gray-500 whitespace-nowrap">
+                          {story.birth_date ? formatDate(story.birth_date) : <span className="text-gray-300">—</span>}
+                        </td>
+
+                        {/* Created At */}
+                        <td className="py-3.5 px-5 text-gray-400 text-xs whitespace-nowrap">
+                          {formatDateTime(story.created_at ?? "")}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3.5 px-5">
+                          <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${
+                            story.status === "Completed"
+                              ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                              : story.status === "Archived"
+                              ? "bg-gray-100 border-gray-200 text-gray-500"
+                              : "bg-amber-50 border-amber-200 text-amber-700"
+                          }`}>
+                            {story.status || "Draft"}
+                          </span>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3.5 px-5">
+                          <div className="flex items-center justify-end gap-1">
+
+                            {/* Edit */}
+                            <Link
+                              href={`/create-story?id=${story.id}`}
+                              title="Edit story"
+                              className="p-1.5 rounded-lg text-[#3bbfbf] hover:bg-[#e0f7f7] transition-colors"
+                            >
+                              <IconEdit />
+                            </Link>
+
+                            {/* Preview */}
+                            <Link
+                              href={`/verification?id=${story.id}`}
+                              title="Preview story"
+                              className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                            >
+                              <IconEye />
+                            </Link>
+
+                            {/* History — enabled only for Completed */}
+                            {isCompleted ? (
+                              <button
+                                onClick={() => setActiveHistoryStory({ id: story.id!, name: displayName })}
+                                title="View PDF history"
+                                className="p-1.5 rounded-lg text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                              >
+                                <IconHistory />
+                              </button>
+                            ) : (
+                              <span title="PDF history available after completion" className="p-1.5 rounded-lg text-gray-200 cursor-not-allowed">
+                                <IconHistory />
+                              </span>
+                            )}
+
+                            {/* PDF — enabled only when url exists */}
+                            {story.latest_pdf_url ? (
+                              <a
+                                href={story.latest_pdf_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Download PDF"
+                                className="p-1.5 rounded-lg text-teal-500 hover:bg-teal-50 hover:text-teal-700 transition-colors"
+                              >
+                                <IconPdf />
+                              </a>
+                            ) : (
+                              <span title="PDF available after story is completed" className="p-1.5 rounded-lg text-gray-200 cursor-not-allowed">
+                                <IconPdf />
+                              </span>
+                            )}
+
+                            {/* Delete — ADMIN only */}
+                            {isAdmin && (
+                              <button
+                                onClick={() => handleDelete(story.id!)}
+                                title="Delete story"
+                                className="p-1.5 rounded-lg text-red-300 hover:bg-red-50 hover:text-red-500 transition-colors ml-0.5"
+                              >
+                                <IconTrash />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Table footer — row count */}
+          {!loading && filteredStories.length > 0 && (
+            <div className="border-t border-gray-100 px-5 py-2.5 flex items-center justify-between">
+              <p className="text-xs text-gray-400">
+                Showing <span className="font-semibold text-gray-600">{filteredStories.length}</span> of{" "}
+                <span className="font-semibold text-gray-600">{stories.length}</span> stories
+              </p>
+              {statusFilter !== "All" && (
+                <button
+                  onClick={() => setStatusFilter("All")}
+                  className="text-xs text-[#3bbfbf] hover:underline font-medium"
+                >
+                  Clear filter
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </main>
+
+      {/* Version History Modal */}
+      {activeHistoryStory && (
+        <VersionHistoryModal
+          storyId={activeHistoryStory.id}
+          babyName={activeHistoryStory.name}
+          onClose={() => setActiveHistoryStory(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─── Version History Modal ─── */
+function VersionHistoryModal({ storyId, babyName, onClose }: { storyId: string; babyName: string; onClose: () => void }) {
+  const [versions, setVersions] = useState<PdfVersion[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadVersions = async () => {
+      try {
+        const data = await fetchPdfVersions(storyId);
+        setVersions(data);
+      } catch (err) {
+        console.error("Error loading PDF versions:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadVersions();
+  }, [storyId]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl flex flex-col max-h-[85vh] border border-gray-100">
+        <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+          <h3 className="font-bold text-gray-800 text-lg">Keepsake PDF History</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-bold p-1 leading-none">×</button>
+        </div>
+
+        <p className="text-xs text-gray-500 mb-4 bg-gray-50 p-2.5 rounded-lg">
+          Version archive for baby: <span className="font-semibold text-[#3bbfbf]">{babyName}</span>
+        </p>
+
+        <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <div className="w-6 h-6 border-2 border-[#3bbfbf] border-t-transparent rounded-full animate-spin" />
+              <p className="text-xs text-gray-400">Loading versions…</p>
+            </div>
+          ) : versions.length === 0 ? (
+            <div className="text-center py-10 text-xs text-gray-400">No booklet versions archived yet.</div>
+          ) : (
+            versions.map((v) => (
+              <div key={v.id} className="flex justify-between items-center border border-gray-100 rounded-xl p-3 bg-gray-50/30 hover:bg-gray-50 transition-colors">
+                <div>
+                  <p className="font-semibold text-xs text-gray-800">Version {v.version}</p>
+                  <p className="text-[10px] text-gray-400">{new Date(v.created_at).toLocaleString()}</p>
+                </div>
+                <a
+                  href={v.pdf_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3.5 py-1.5 bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white text-[10px] font-bold rounded-lg transition-colors shadow-sm"
+                >
+                  Download
+                </a>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }

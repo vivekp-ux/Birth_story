@@ -1,12 +1,10 @@
 "use client";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useStory } from "@/context/StoryContext";
-const formatCoordinates = (lat: string, lng: string) =>
-  `${lat}° N, ${lng}° E`;
+import { getCurrentUserProfile } from "@/services/stories";
 
 const toTitleCase = (str: string) =>
   str.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
@@ -18,7 +16,6 @@ const capitalizedFields = [
   "otherFamily", "firstOutfit", "motherOutfit", "roomType",
 ];
 
-// These fields only allow letters and spaces
 const nameOnlyFields = [
   "babyName", "motherName", "fatherName",
   "maternalGrandmother", "maternalGrandfather",
@@ -27,14 +24,14 @@ const nameOnlyFields = [
 ];
 
 const BRANCHES = [
-  { name: "Banashankari ",   lat: "12.9248", lng: "77.5401" },
-  { name: "HSR Layout ",     lat: "12.9103", lng: "77.6432" },
-  { name: "Kalyan Nagar ",   lat: "13.0221", lng: "77.6494" },
-  { name: "Hennur Road ",    lat: "13.0538", lng: "77.6398" },
-  { name: "Bhattarahalli ",  lat: "13.0242", lng: "77.7126" },
-  { name: "Budigere Cross ", lat: "13.0505", lng: "77.7411" },
-  { name: "Hoskote ",  lat: "13.0691", lng: "77.7981" },
-  { name: "Hosur",         lat: "12.7364", lng: "77.8322" },
+  { name: "Banashankari",   lat: "12.9248", lng: "77.5401" },
+  { name: "HSR Layout",     lat: "12.9103", lng: "77.6432" },
+  { name: "Kalyan Nagar",   lat: "13.0221", lng: "77.6494" },
+  { name: "Hennur Road",    lat: "13.0538", lng: "77.6398" },
+  { name: "Bhattarahalli",  lat: "13.0242", lng: "77.7126" },
+  { name: "Budigere Cross", lat: "13.0505", lng: "77.7411" },
+  { name: "Hoskote",        lat: "13.0691", lng: "77.7981" },
+  { name: "Hosur",          lat: "12.7364", lng: "77.8322" },
 ];
 
 function Field({ label, name, value, onChange, type = "text", placeholder = "", ringColor = "focus:ring-[#3bbfbf]", error = false }: {
@@ -62,7 +59,6 @@ function TimeSelect({ label, value, onChange, ringColor = "focus:ring-[#3bbfbf]"
   onChange: (time: string) => void;
   ringColor?: string;
 }) {
-  // Parse existing value like "4:22 PM" or ""
   const parts = value.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
   const initHour = parts ? parts[1] : "12";
   const initMin = parts ? parts[2] : "00";
@@ -72,8 +68,15 @@ function TimeSelect({ label, value, onChange, ringColor = "focus:ring-[#3bbfbf]"
   const [minute, setMinute] = useState(initMin);
   const [ampm, setAmpm] = useState(initAmpm);
 
-  const emit = (h: string, m: string, a: string) => onChange(`${h}:${m} ${a}`);
+  useEffect(() => {
+    if (parts) {
+      setHour(parts[1]);
+      setMinute(parts[2]);
+      setAmpm(parts[3].toUpperCase());
+    }
+  }, [value]);
 
+  const emit = (h: string, m: string, a: string) => onChange(`${h}:${m} ${a}`);
   const selectClass = `border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor} bg-white`;
 
   return (
@@ -111,29 +114,58 @@ function TimeSelect({ label, value, onChange, ringColor = "focus:ring-[#3bbfbf]"
   );
 }
 
-export default function CreateStoryPage() {
-  const { form, setForm, babyImage, setBabyImage, saveDraft, draftSaved } = useStory();
+function CreateStoryContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const idParam = searchParams.get("id");
+
+  const {
+    form,
+    setForm,
+    babyImage,
+    setBabyImage,
+    saveDraft,
+    draftSaved,
+    loadStoryFromDb,
+    setStoryId,
+    saveStoryToDb,
+    loading,
+    validationError,
+    clearValidationError,
+  } = useStory();
+
+  // Auto-dismiss validation error after 5 seconds
+  useEffect(() => {
+    if (validationError) {
+      const timer = setTimeout(() => clearValidationError(), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [validationError]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [doctorInput, setDoctorInput] = useState("");
   const [nurseInput, setNurseInput] = useState("");
   const [showErrors, setShowErrors] = useState(false);
-  const router = useRouter();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const profile = await getCurrentUserProfile();
+      if (!profile) {
+        router.push("/login");
+        return;
+      }
+      if (idParam) {
+        loadStoryFromDb(idParam);
+      } else {
+        setStoryId(null);
+      }
+    };
+    checkAuth();
+  }, [idParam]);
 
   const isBoy = form.gender === "male";
   const isGirl = form.gender === "female";
 
-  const latitude = parseFloat(form.latitude);
-  const longitude = parseFloat(form.longitude);
-
-  const isValidLocation =
-    !isNaN(latitude) &&
-    !isNaN(longitude) &&
-    latitude >= -90 &&
-    latitude <= 90 &&
-    longitude >= -180 &&
-    longitude <= 180;
-
-  // Dynamic color classes based on gender
   const accent = isGirl ? "text-pink-400" : "text-[#3bbfbf]";
   const ringColor = isGirl ? "focus:ring-pink-300" : "focus:ring-[#3bbfbf]";
   const btnPrimary = isGirl
@@ -148,7 +180,6 @@ export default function CreateStoryPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    // Name fields: letters and spaces only
     const cleaned = nameOnlyFields.includes(name) ? value.replace(/[^a-zA-Z\s]/g, "") : value;
     setForm((f) => ({
       ...f,
@@ -171,12 +202,28 @@ export default function CreateStoryPage() {
     ...(!hasNurse ? ["nurse"] : []),
   ];
 
-  const handlePreview = () => {
+  const handlePreview = async () => {
     if (missingFields.length > 0) {
       setShowErrors(true);
       return;
     }
-    router.push("/verification");
+    try {
+      const savedId = await saveStoryToDb(form.status || "Draft");
+      router.push(`/verification?id=${savedId}`);
+    } catch (err: unknown) {
+      // Validation errors are already shown via the validationError banner
+      const msg = err instanceof Error ? err.message : "";
+      if (!msg.startsWith("Please enter")) {
+        alert("Failed to save story. Please try again.");
+      }
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    const id = await saveDraft();
+    if (id && !idParam) {
+      router.push(`/create-story?id=${id}`);
+    }
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -197,6 +244,35 @@ export default function CreateStoryPage() {
       </header>
 
       <main className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-10">
+        <div className="mb-6 flex justify-between items-center bg-white/70 backdrop-blur-sm px-6 py-4 rounded-xl shadow-sm border border-gray-100">
+          <h1 className="text-xl font-bold text-gray-800">
+            {idParam ? "Edit Birth Story" : "Create New Birth Story"}
+          </h1>
+          {idParam && form.status && (
+            <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+              form.status === "Completed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+            }`}>
+              {form.status}
+            </span>
+          )}
+        </div>
+
+        {/* Validation Error Banner */}
+        {validationError && (
+          <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-5 py-3.5 rounded-xl shadow-sm animate-[slideDown_0.3s_ease-out]">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 shrink-0 text-red-400">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            </svg>
+            <p className="text-sm font-medium flex-1">{validationError}</p>
+            <button
+              onClick={clearValidationError}
+              className="text-red-400 hover:text-red-600 transition-colors text-lg font-bold leading-none p-1"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         <form className="bg-white/90 backdrop-blur-sm rounded-2xl shadow p-6 sm:p-8 flex flex-col gap-6" onSubmit={(e) => e.preventDefault()}>
 
           {/* Gender toggle */}
@@ -210,16 +286,7 @@ export default function CreateStoryPage() {
                   : "bg-white border-blue-200 text-blue-400 hover:border-blue-400"
               }`}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                 <circle cx="10" cy="14" r="5" />
                 <path d="M13.5 10.5L19 5m-4 0h4v4" />
               </svg>
@@ -235,16 +302,7 @@ export default function CreateStoryPage() {
                   : "bg-white border-pink-200 text-pink-400 hover:border-pink-400"
               }`}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                 <circle cx="12" cy="9" r="5" />
                 <path d="M12 14v7m-3-3h6" />
               </svg>
@@ -262,7 +320,7 @@ export default function CreateStoryPage() {
               >
                 <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={handleImageChange} />
                 {babyImage ? (
-                  <Image src={babyImage} alt="Baby" fill className="object-contain bg-white" />
+                  <Image src={babyImage} alt="Baby" fill className="object-contain bg-white" unoptimized />
                 ) : (
                   <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 ${uploadBg} transition-colors p-4`}>
                     <Image src="/icon.png" alt="Upload" width={48} height={48} className="object-contain" />
@@ -285,24 +343,24 @@ export default function CreateStoryPage() {
                 ].map(({ label, name, type, placeholder, required }) => {
                   const hasError = showErrors && required && !(form[name as keyof typeof form] as string)?.trim();
                   return (
-                  <div key={name} className="flex flex-col gap-1">
-                    <label className="text-sm font-medium text-gray-600">{label}{hasError && <span className="text-red-500 ml-1">*</span>}</label>
-                    <input
-                      type={type || "text"}
-                      name={name}
-                      value={form[name as keyof typeof form] as string}
-                      onChange={handleChange}
-                      placeholder={placeholder || ""}
-                      className={`border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor} ${hasError ? "border-red-400 placeholder-red-300 bg-red-50" : "border-gray-200"}`}
-                    />
-                  </div>
+                    <div key={name} className="flex flex-col gap-1">
+                      <label className="text-sm font-medium text-gray-600">{label}{hasError && <span className="text-red-500 ml-1">*</span>}</label>
+                      <input
+                        type={type || "text"}
+                        name={name}
+                        value={form[name as keyof typeof form] as string}
+                        onChange={handleChange}
+                        placeholder={placeholder || ""}
+                        className={`border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${ringColor} ${hasError ? "border-red-400 placeholder-red-300 bg-red-50" : "border-gray-200"}`}
+                      />
+                    </div>
                   );
                 })}
 
                 <TimeSelect label="Birth Time" value={form.birthTime} onChange={(t) => setForm((f) => ({ ...f, birthTime: t }))} ringColor={ringColor} />
                 <TimeSelect label="First Cry Time" value={form.firstCryTime} onChange={(t) => setForm((f) => ({ ...f, firstCryTime: t }))} ringColor={ringColor} />
 
-                {/* Latitude with ° N suffix */}
+                {/* Latitude */}
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-medium text-gray-600">Latitude</label>
                   <div className="relative">
@@ -318,7 +376,7 @@ export default function CreateStoryPage() {
                   </div>
                 </div>
 
-                {/* Longitude with ° E suffix */}
+                {/* Longitude */}
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-medium text-gray-600">Longitude</label>
                   <div className="relative">
@@ -334,7 +392,7 @@ export default function CreateStoryPage() {
                   </div>
                 </div>
 
-                {/* Branch dropdown — auto-fills lat/lng */}
+                {/* Branch dropdown */}
                 <div className="flex flex-col gap-1 sm:col-span-2">
                   <label className="text-sm font-medium text-gray-600">Hospital / Branch</label>
                   <select
@@ -491,27 +549,42 @@ export default function CreateStoryPage() {
               <Field label="Mother's Outfit" name="motherOutfit" value={form.motherOutfit} onChange={handleChange} placeholder="Cream gown with brown lines" ringColor={ringColor} />
             </div>
           </section>
-          
 
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
-           
             <button
               type="button"
+              disabled={loading}
               onClick={handlePreview}
-              className={`flex-1 text-center font-semibold rounded-lg py-2.5 transition-colors ${btnPrimary}`}
+              className={`flex-1 text-center font-semibold rounded-lg py-2.5 transition-colors ${btnPrimary} disabled:opacity-60`}
             >
-              Preview Story
+              {loading ? "Saving Story..." : "Preview Story"}
             </button>
             <button
               type="button"
-              onClick={saveDraft}
-              className={`flex-1 font-semibold rounded-lg py-2.5 transition-colors ${btnSecondary}`}
+              disabled={loading}
+              onClick={handleSaveDraft}
+              className={`flex-1 font-semibold rounded-lg py-2.5 transition-colors ${btnSecondary} disabled:opacity-60`}
             >
-              {draftSaved ? "✓ Draft Saved!" : "Save Draft"}
+              {loading ? "Saving Draft..." : (draftSaved ? "✓ Draft Saved!" : "Save Draft")}
             </button>
           </div>
         </form>
       </main>
     </div>
+  );
+}
+
+export default function CreateStoryPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50/50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-[#3bbfbf] border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm font-semibold text-gray-500">Loading details...</p>
+        </div>
+      </div>
+    }>
+      <CreateStoryContent />
+    </Suspense>
   );
 }

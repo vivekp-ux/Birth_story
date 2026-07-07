@@ -1,19 +1,52 @@
 "use client";
+import { useEffect, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useStory } from "@/context/StoryContext";
+import { getCurrentUserProfile } from "@/services/stories";
 
-export default function VerificationPage() {
-  const { form, babyImage } = useStory();
+function VerificationPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const idParam = searchParams.get("id");
+  
+  const { form, babyImage, loadStoryFromDb, loading } = useStory();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const profile = await getCurrentUserProfile();
+      if (!profile) {
+        router.push("/login");
+        return;
+      }
+      if (idParam && (!form.id || form.id !== idParam)) {
+        loadStoryFromDb(idParam);
+      }
+    };
+    checkAuth();
+  }, [idParam]);
+
   const accent = form.gender === "female" ? "text-pink-400" : "text-[#3bbfbf]";
   const accentHex = form.gender === "female" ? "#f472b6" : "#3bbfbf";
   const btnPrimary = form.gender === "female" ? "bg-pink-400 hover:bg-pink-500 text-white" : "bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white";
   const btnSecondary = form.gender === "female" ? "border border-pink-400 text-pink-400 hover:bg-pink-50" : "border border-[#3bbfbf] text-[#3bbfbf] hover:bg-[#e8f7f7]";
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-[#3bbfbf] border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm font-semibold text-gray-500">Loading details for verification...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-white shadow-sm px-4 sm:px-8 py-4 flex items-center gap-4">
-        <Link href="/create-story" className="flex items-center gap-1 px-4 py-2 rounded-lg border border-[#3bbfbf] text-[#3bbfbf] text-sm font-medium hover:bg-[#e8f7f7] transition-colors">← Back</Link>
+        <Link href={form.id ? `/create-story?id=${form.id}` : "/create-story"} className="flex items-center gap-1 px-4 py-2 rounded-lg border border-[#3bbfbf] text-[#3bbfbf] text-sm font-medium hover:bg-[#e8f7f7] transition-colors">← Back</Link>
         <h1 className="text-lg font-semibold text-gray-800">Verify Details</h1>
       </header>
 
@@ -29,6 +62,7 @@ export default function VerificationPage() {
                 height={800}
                 className="w-full h-full object-contain"
                 priority
+                unoptimized
               />
             ) : (
               <div className="flex flex-col items-center gap-3 p-8">
@@ -74,10 +108,10 @@ export default function VerificationPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 mt-8">
-              <Link href="/pdf-preview" className={`flex-1 text-center font-semibold rounded-lg py-2.5 text-sm transition-colors ${btnPrimary}`}>
+              <Link href={form.id ? `/pdf-preview?id=${form.id}` : "/pdf-preview"} className={`flex-1 text-center font-semibold rounded-lg py-2.5 text-sm transition-colors ${btnPrimary}`}>
                 Looks Good → Preview PDF
               </Link>
-              <Link href="/create-story" className={`flex-1 text-center font-semibold rounded-lg py-2.5 text-sm transition-colors ${btnSecondary}`}>
+              <Link href={form.id ? `/create-story?id=${form.id}` : "/create-story"} className={`flex-1 text-center font-semibold rounded-lg py-2.5 text-sm transition-colors ${btnSecondary}`}>
                 Edit Details
               </Link>
             </div>
@@ -86,5 +120,20 @@ export default function VerificationPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function VerificationPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50/50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-[#3bbfbf] border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm font-semibold text-gray-500">Loading verification details...</p>
+        </div>
+      </div>
+    }>
+      <VerificationPageContent />
+    </Suspense>
   );
 }
