@@ -187,7 +187,7 @@ function PdfPreviewPageContent() {
       if (babyImage) {
         try {
           const babyImgData = await loadImage(babyImage);
-          doc.addImage(babyImgData, "JPEG", 0, 0, 148.5, 210);
+          doc.addImage(babyImgData, "PNG", 0, 0, 148.5, 210);
         } catch (e) {
           doc.setFillColor(isFemale ? 252 : 217, isFemale ? 231 : 242, isFemale ? 243 : 244);
           doc.rect(0, 0, 148.5, 210, "F");
@@ -211,60 +211,306 @@ function PdfPreviewPageContent() {
       doc.rect(148.5, 0, 148.5, 210, "F");
 
       // Story contents
-      const textX = 148.5 + 16;
-      const textW = 148.5 - 32;
-      let textY = 20;
+      const textX = 148.5 + 17.2;
+      const textW = 148.5 - 17.2 - 15.9;
 
-      const drawStoryBlock = (title: string, content: string) => {
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.setTextColor(17, 17, 17);
-        doc.text(title, textX, textY);
-        textY += 4.5;
+      interface Segment {
+        text: string;
+        isAccent?: boolean;
+        isBold?: boolean;
+      }
+      interface Paragraph {
+        segments: Segment[];
+        hasBrAfter?: boolean;
+      }
+
+      interface Token {
+        text: string;
+        isAccent?: boolean;
+        isBold?: boolean;
+      }
+
+      const blocks: { title: string; paragraphs: Paragraph[] }[] = [];
+
+      // 1. The First Cry
+      const cryParagraphs: Paragraph[] = [];
+      const cryP1Segments: Segment[] = [
+        { text: "Your mother, " },
+        { text: form.motherName || "your mother", isAccent: true },
+        { text: ", had tears of joy in her eyes when she heard your very first cry on " }
+      ];
+      if (form.birthDate) {
+        const dateTimeStr = formatDate(form.birthDate) + (form.birthTime ? ` at ${form.birthTime}` : "");
+        cryP1Segments.push({ text: dateTimeStr, isAccent: true });
+      }
+      cryP1Segments.push({ text: "." });
+      cryParagraphs.push({ segments: cryP1Segments, hasBrAfter: false });
+
+      cryParagraphs.push({
+        segments: [{ text: "That beautiful moment marked the beginning of your journey." }],
+        hasBrAfter: false
+      });
+      blocks.push({ title: "The First Cry", paragraphs: cryParagraphs });
+
+      // 2. Welcomed With Love
+      const loveParagraphs: Paragraph[] = [];
+      const loveP1Segments: Segment[] = [
+        { text: "You were delivered at Ovum Hospitals, " }
+      ];
+      if (form.hospital) {
+        loveP1Segments.push({ text: form.hospital, isAccent: true });
+      }
+      loveP1Segments.push({ text: ", surrounded by love and care." });
+
+      const hasDoctors = form.doctors.length > 0;
+      const hasNurses = form.nurse.length > 0;
+
+      loveParagraphs.push({
+        segments: loveP1Segments,
+        hasBrAfter: hasDoctors || hasNurses
+      });
+
+      if (hasDoctors) {
+        const loveP2Segments: Segment[] = [
+          { text: "Your mother's trusted doctors, " },
+          { text: form.doctors.join(", "), isAccent: true },
+          { text: ", stood beside her along with your father" }
+        ];
+        if (form.fatherName) {
+          loveP2Segments.push({ text: ", " });
+          loveP2Segments.push({ text: form.fatherName, isAccent: true });
+        }
+        loveP2Segments.push({ text: "." });
         
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8.5);
-        doc.setTextColor(30, 30, 30);
-        const splitText = doc.splitTextToSize(content, textW);
-        doc.text(splitText, textX, textY);
-        textY += (splitText.length * 3.8) + 4.5;
+        loveParagraphs.push({
+          segments: loveP2Segments,
+          hasBrAfter: hasNurses
+        });
+      }
+
+      if (hasNurses) {
+        loveParagraphs.push({
+          segments: [
+            { text: "Sister " },
+            { text: form.nurse.join(", "), isAccent: true },
+            { text: " and her nursing team cared for you with warmth and devotion." }
+          ],
+          hasBrAfter: false
+        });
+      }
+      blocks.push({ title: "Welcomed With Love", paragraphs: loveParagraphs });
+
+      // 3. A Father's First Hold
+      const fatherParagraphs: Paragraph[] = [];
+      const relatives = [
+        form.maternalGrandmother,
+        form.maternalGrandfather,
+        form.paternalGrandmother,
+        form.paternalGrandfather
+      ].filter(Boolean);
+
+      fatherParagraphs.push({
+        segments: [{ text: "Wrapped gently in soft cloth, you were placed into your father's arms for the very first time." }],
+        hasBrAfter: relatives.length > 0
+      });
+
+      if (relatives.length > 0) {
+        fatherParagraphs.push({
+          segments: [
+            { text: "His joy was immeasurable as he introduced you to your loving family — " },
+            { text: relatives.join(", "), isAccent: true },
+            { text: " waiting excitedly to meet you." }
+          ],
+          hasBrAfter: false
+        });
+      }
+      blocks.push({ title: "A Father's First Hold", paragraphs: fatherParagraphs });
+
+      // 4. A Room Filled With Happiness
+      if (form.roomType) {
+        const roomParagraphs: Paragraph[] = [];
+        roomParagraphs.push({
+          segments: [
+            { text: "To celebrate your arrival, you were welcomed into the " },
+            { text: form.roomType, isAccent: true },
+            { text: " chosen lovingly by your mother, decorated with balloons and colorful ribbons." }
+          ],
+          hasBrAfter: form.checkInDate ? true : false
+        });
+
+        if (form.checkInDate) {
+          const checkInStr = `On ${formatDate(form.checkInDate)}${form.checkInTime ? ` at ${form.checkInTime}` : ""}`;
+          roomParagraphs.push({
+            segments: [
+              { text: checkInStr, isAccent: true },
+              { text: ", your family settled in for a beautiful stay filled with memories." }
+            ],
+            hasBrAfter: false
+          });
+        }
+        blocks.push({ title: "A Room Filled With Happiness", paragraphs: roomParagraphs });
+      }
+
+      // 5. With Love, From Ovum
+      const ovumParagraphs: Paragraph[] = [];
+      ovumParagraphs.push({
+        segments: [{ text: "Your birth brought immense happiness not only to your family, but to all of us at Ovum Hospitals." }],
+        hasBrAfter: true
+      });
+      ovumParagraphs.push({
+        segments: [{ text: "This keepsake is a celebration of the love, joy, and hope you brought into the world." }],
+        hasBrAfter: true
+      });
+      ovumParagraphs.push({
+        segments: [{ text: "May your life always shine as brightly as the happiness you brought." }],
+        hasBrAfter: false
+      });
+      blocks.push({ title: "With Love, From Ovum", paragraphs: ovumParagraphs });
+
+      // Calculate total height to center vertically
+      const calculateStoryBlocksHeight = () => {
+        let totalH = 0;
+        for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
+          const block = blocks[bIdx];
+          totalH += 4.0; // title height spacing
+          
+          for (let pIdx = 0; pIdx < block.paragraphs.length; pIdx++) {
+            const paragraph = block.paragraphs[pIdx];
+            const tokens: Token[] = [];
+            for (const segment of paragraph.segments) {
+              const parts = segment.text.split(/(\s+)/);
+              for (const part of parts) {
+                if (part) {
+                  tokens.push({
+                    text: part,
+                    isAccent: segment.isAccent,
+                    isBold: segment.isBold,
+                  });
+                }
+              }
+            }
+            
+            const lines: Token[][] = [];
+            let currentLine: Token[] = [];
+            let currentLineWidth = 0;
+            
+            doc.setFontSize(10.5);
+            for (const token of tokens) {
+              doc.setFont("helvetica", token.isBold || token.isAccent ? "bold" : "normal");
+              const tokenWidth = doc.getTextWidth(token.text);
+              if (currentLine.length === 0 || currentLineWidth + tokenWidth <= textW) {
+                currentLine.push(token);
+                currentLineWidth += tokenWidth;
+              } else {
+                if (token.text.trim() === "") {
+                  lines.push(currentLine);
+                  currentLine = [];
+                  currentLineWidth = 0;
+                } else {
+                  lines.push(currentLine);
+                  currentLine = [token];
+                  currentLineWidth = tokenWidth;
+                }
+              }
+            }
+            if (currentLine.length > 0) {
+              lines.push(currentLine);
+            }
+            
+            totalH += lines.length * 4.74; // line height for 10.5 font
+            if (paragraph.hasBrAfter) {
+              totalH += 4.74;
+            }
+          }
+          if (bIdx < blocks.length - 1) {
+            totalH += 3.2; // space-y-3 margin
+          }
+        }
+        return totalH;
       };
 
-      // 1. Cry
-      const dateFormatted = form.birthDate ? formatDate(form.birthDate) : "";
-      const timeStr = form.birthTime ? ` at ${form.birthTime}` : "";
-      const p1 = `Your mother, ${form.motherName || "your mother"}, had tears of joy in her eyes when she heard your very first cry on ${dateFormatted}${timeStr}. That beautiful moment marked the beginning of your journey.`;
-      drawStoryBlock("The First Cry", p1);
+      const totalHeight = calculateStoryBlocksHeight();
+      let textY = Math.max(12, (210 - totalHeight) / 2);
 
-      // 2. Love
-      let p2 = `You were delivered at Ovum Hospitals, ${form.hospital || "our branch"}, surrounded by love and care.`;
-      if (form.doctors.length > 0) {
-        p2 += ` Your mother's trusted doctors, ${form.doctors.join(", ")}, stood beside her along with your father, ${form.fatherName || "your father"}.`;
-      }
-      if (form.nurse.length > 0) {
-        p2 += ` Sister ${form.nurse.join(", ")} and her nursing team cared for you with warmth and devotion.`;
-      }
-      drawStoryBlock("Welcomed With Love", p2);
+      // Draw the blocks
+      for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
+        const block = blocks[bIdx];
+        
+        // Draw title
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.75);
+        doc.setTextColor(17, 17, 17);
+        doc.text(block.title, textX, textY);
+        textY += 4.0;
 
-      // 3. Father
-      let p3 = `Wrapped gently in soft cloth, you were placed into your father's arms for the very first time.`;
-      const relatives = [form.maternalGrandmother, form.maternalGrandfather, form.paternalGrandmother, form.paternalGrandfather].filter(Boolean);
-      if (relatives.length > 0) {
-        p3 += ` His joy was immeasurable as he introduced you to your loving family — ${relatives.join(", ")} waiting excitedly to meet you.`;
-      }
-      drawStoryBlock("A Father's First Hold", p3);
+        // Draw paragraphs
+        for (let pIdx = 0; pIdx < block.paragraphs.length; pIdx++) {
+          const paragraph = block.paragraphs[pIdx];
+          const tokens: Token[] = [];
+          for (const segment of paragraph.segments) {
+            const parts = segment.text.split(/(\s+)/);
+            for (const part of parts) {
+              if (part) {
+                tokens.push({
+                  text: part,
+                  isAccent: segment.isAccent,
+                  isBold: segment.isBold,
+                });
+              }
+            }
+          }
 
-      // 4. Room
-      if (form.roomType) {
-        const checkinDateFormatted = form.checkInDate ? formatDate(form.checkInDate) : "";
-        const checkinTimeStr = form.checkInTime ? ` at ${form.checkInTime}` : "";
-        const p4 = `To celebrate your arrival, you were welcomed into the ${form.roomType} chosen lovingly by your mother, decorated with balloons and colorful ribbons. On ${checkinDateFormatted}${checkinTimeStr}, your family settled in for a beautiful stay filled with memories.`;
-        drawStoryBlock("A Room Filled With Happiness", p4);
-      }
+          const lines: Token[][] = [];
+          let currentLine: Token[] = [];
+          let currentLineWidth = 0;
 
-      // 5. Keepsake close
-      const p5 = `Your birth brought immense happiness not only to your family, but to all of us at Ovum Hospitals. This keepsake is a celebration of the love, joy, and hope you brought into the world. May your life always shine as brightly as the happiness you brought.`;
-      drawStoryBlock("With Love, From Ovum", p5);
+          doc.setFontSize(10.5);
+          for (const token of tokens) {
+            doc.setFont("helvetica", token.isBold || token.isAccent ? "bold" : "normal");
+            const tokenWidth = doc.getTextWidth(token.text);
+            if (currentLine.length === 0 || currentLineWidth + tokenWidth <= textW) {
+              currentLine.push(token);
+              currentLineWidth += tokenWidth;
+            } else {
+              if (token.text.trim() === "") {
+                lines.push(currentLine);
+                currentLine = [];
+                currentLineWidth = 0;
+              } else {
+                lines.push(currentLine);
+                currentLine = [token];
+                currentLineWidth = tokenWidth;
+              }
+            }
+          }
+          if (currentLine.length > 0) {
+            lines.push(currentLine);
+          }
+
+          for (const line of lines) {
+            let drawX = textX;
+            for (const token of line) {
+              doc.setFont("helvetica", token.isBold || token.isAccent ? "bold" : "normal");
+              if (token.isAccent) {
+                doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+              } else {
+                doc.setTextColor(30, 30, 30);
+              }
+              doc.text(token.text, drawX, textY);
+              drawX += doc.getTextWidth(token.text);
+            }
+            textY += 4.74;
+          }
+
+          if (paragraph.hasBrAfter) {
+            textY += 4.74; // blank line space
+          }
+        }
+        
+        if (bIdx < blocks.length - 1) {
+          textY += 3.2; // space-y-3 margin
+        }
+      }
 
       // Save PDF output as Blob
       const pdfBlob = doc.output("blob");
