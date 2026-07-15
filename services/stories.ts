@@ -51,35 +51,48 @@ export async function fetchStories(options?: {
 }) {
   const page = options?.page ?? 1;
   const limit = options?.limit ?? 10;
-  const search = options?.search ?? "";
+  const search = (options?.search ?? "").trim().toLowerCase();
   const status = options?.status ?? "All";
 
+  // Fetch all stories (status-filtered) then apply search + pagination client-side.
+  // This is necessary because doctor_names is a text[] column and PostgREST does not
+  // support partial ilike matching on array elements.
   let query = supabase
     .from("stories")
-    .select("*", { count: "exact" })
+    .select("*")
     .order("created_at", { ascending: false });
 
   if (status !== "All") {
     query = query.eq("status", status);
   }
 
-  if (search) {
-    const searchVal = `%${search}%`;
-    query = query.or(`baby_name.ilike.${searchVal},mother_name.ilike.${searchVal},father_name.ilike.${searchVal},hospital.ilike.${searchVal}`);
-  }
-
-  const from = (page - 1) * limit;
-  const to = from + limit - 1;
-
-  const { data, error, count } = await query.range(from, to);
-
+  const { data, error } = await query;
   if (error) throw error;
 
-  const total = count ?? 0;
-  const totalPages = Math.ceil(total / limit);
+  let stories = (data as Story[]) ?? [];
+
+  if (search) {
+    stories = stories.filter((s) => {
+      const doctors = (s.doctor_names || []).join(" ").toLowerCase();
+      const nurses  = (s.nurse_names  || []).join(" ").toLowerCase();
+      return (
+        (s.baby_name    || "").toLowerCase().includes(search) ||
+        (s.mother_name  || "").toLowerCase().includes(search) ||
+        (s.father_name  || "").toLowerCase().includes(search) ||
+        (s.hospital     || "").toLowerCase().includes(search) ||
+        doctors.includes(search) ||
+        nurses.includes(search)
+      );
+    });
+  }
+
+  const total      = stories.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const from       = (page - 1) * limit;
+  const paginated  = stories.slice(from, from + limit);
 
   return {
-    stories: data as Story[],
+    stories: paginated,
     total,
     totalPages,
     page,
