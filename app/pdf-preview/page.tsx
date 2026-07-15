@@ -7,6 +7,7 @@ import { useStory, StoryForm } from "@/context/StoryContext";
 import { useReactToPrint } from "react-to-print";
 import { jsPDF } from "jspdf";
 import { uploadPdf, getCurrentUserProfile } from "@/services/stories";
+import Toast from "@/components/Toast";
 
 // Formats "2026-05-09" → "9th May 2026"
 function formatDate(dateStr: string): string {
@@ -28,6 +29,7 @@ function PdfPreviewPageContent() {
   const { form, babyImage, loadStoryFromDb, loading, clearDraft } = useStory();
   const [downloading, setDownloading] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   const componentRef = useRef<HTMLDivElement>(null);
 
@@ -59,7 +61,7 @@ function PdfPreviewPageContent() {
   // Programmatic Vector PDF generator for sharp downloads and Supabase Storage upload
   const handleDownloadPdf = async () => {
     if (!form.id) {
-      alert("Story must be saved before downloading PDF.");
+      setToast({ message: "Story must be saved before downloading PDF.", type: "error" });
       return;
     }
 
@@ -527,11 +529,11 @@ function PdfPreviewPageContent() {
       clearDraft();
       
       // Notify success and redirect back to Dashboard
-      alert("PDF Kept and backed up successfully!");
-      router.push("/dashboard");
+      setToast({ message: "PDF saved and backed up successfully!", type: "success" });
+      setTimeout(() => router.push("/dashboard"), 2000);
     } catch (err: any) {
       console.error("PDF download/upload error:", err);
-      alert("Error generating PDF: " + (err?.message || "Internal error"));
+      setToast({ message: "Error generating PDF: " + (err?.message || "Internal error"), type: "error" });
       setStatusMessage("");
     } finally {
       setDownloading(false);
@@ -587,6 +589,10 @@ function PdfPreviewPageContent() {
           </div>
         </div>
       </div>
+
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} duration={toast.type === "success" ? 2000 : 4000} />
+      )}
     </div>
   );
 }

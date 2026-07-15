@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStory } from "@/context/StoryContext";
 import { getCurrentUserProfile } from "@/services/stories";
+import Toast from "@/components/Toast";
 
 const toTitleCase = (str: string) =>
   str.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
@@ -146,6 +147,7 @@ function CreateStoryContent() {
   const [doctorInput, setDoctorInput] = useState("");
   const [nurseInput, setNurseInput] = useState("");
   const [showErrors, setShowErrors] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -214,7 +216,7 @@ function CreateStoryContent() {
       // Validation errors are already shown via the validationError banner
       const msg = err instanceof Error ? err.message : "";
       if (!msg.startsWith("Please enter")) {
-        alert("Failed to save story. Please try again.");
+        setToast({ message: "Failed to save story. Please try again.", type: "error" });
       }
     }
   };
@@ -570,6 +572,10 @@ function CreateStoryContent() {
           </div>
         </form>
       </main>
+
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
     </div>
   );
 }

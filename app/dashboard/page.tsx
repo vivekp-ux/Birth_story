@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Story, UserProfile, PdfVersion } from "@/types/story";
-import { fetchStories, getCurrentUserProfile, fetchPdfVersions } from "@/services/stories";
+import { fetchStories, getCurrentUserProfile, fetchPdfVersions, fetchStoryStats } from "@/services/stories";
+import Toast from "@/components/Toast";
 
 type StatusFilter = "All" | "Draft" | "Completed" | "Archived";
 
@@ -40,9 +41,9 @@ function IconEdit() {
 
 function IconEye() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-      <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
-      <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41z" clipRule="evenodd" />
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6" />
     </svg>
   );
 }
@@ -84,32 +85,94 @@ function SkeletonRow() {
   );
 }
 
-export default function DashboardPage() {
+function DashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Read params directly from the URL (source of truth)
+  const currentPage = Number(searchParams.get("page") || "1");
+  const statusFilter = (searchParams.get("status") || "All") as StatusFilter;
+  const searchQuery = searchParams.get("search") || "";
+
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [stats, setStats] = useState({ total: 0, draft: 0, completed: 0 });
   const [activeHistoryStory, setActiveHistoryStory] = useState<{ id: string; name: string } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  // Search input state to allow typing without triggering fetches on every keystroke
+  const [searchInput, setSearchInput] = useState(searchQuery);
 
+  const PAGE_SIZE = Number(process.env.NEXT_PUBLIC_PAGE_SIZE) || 10;
+
+  // Sync searchInput state with URL searchQuery when it changes (e.g. back/forward navigation)
   useEffect(() => {
-    const checkAuthAndLoad = async () => {
+    setSearchInput(searchQuery);
+  }, [searchQuery]);
+
+  // Debounce search input to update URL
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (searchInput !== searchQuery) {
+        updateUrl(1, statusFilter, searchInput);
+      }
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [searchInput]);
+
+  const updateUrl = (pageVal: number, statusVal: string, searchVal: string) => {
+    const params = new URLSearchParams();
+    if (pageVal > 1) {
+      params.set("page", String(pageVal));
+    }
+    if (statusVal !== "All") {
+      params.set("status", statusVal);
+    }
+    if (searchVal.trim()) {
+      params.set("search", searchVal.trim());
+    }
+    const queryStr = params.toString();
+    router.replace(queryStr ? `/dashboard?${queryStr}` : "/dashboard");
+  };
+
+  // Load data when URL params change
+  useEffect(() => {
+    const loadData = async () => {
       setLoading(true);
       try {
-        const profile = await getCurrentUserProfile();
-        if (!profile) { router.push("/login"); return; }
-        setUserProfile(profile);
-        const data = await fetchStories();
+        let profile = userProfile;
+        if (!profile) {
+          profile = await getCurrentUserProfile();
+          if (!profile) {
+            router.push("/login");
+            return;
+          }
+          setUserProfile(profile);
+        }
+
+        const { stories: data, total, totalPages: pages } = await fetchStories({
+          page: currentPage,
+          limit: PAGE_SIZE,
+          search: searchQuery,
+          status: statusFilter,
+        });
+
         setStories(data);
+        setTotalCount(total);
+        setTotalPages(pages);
+
+        const statsData = await fetchStoryStats();
+        setStats(statsData);
       } catch (err) {
-        console.error("Auth / Load stories error:", err);
+        console.error("Load stories / stats error:", err);
       } finally {
         setLoading(false);
       }
     };
-    checkAuthAndLoad();
-  }, []);
+    loadData();
+  }, [currentPage, statusFilter, searchQuery]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -119,8 +182,12 @@ export default function DashboardPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this birth story? This action cannot be undone.")) return;
 
+    // Optimistic Update: remove from local state immediately
+    const originalStories = [...stories];
+    setStories((prev) => prev.filter((s) => s.id !== id));
+    setTotalCount((prev) => Math.max(0, prev - 1));
+
     try {
-      // Verify we have a valid user first, then get the session token
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) throw new Error("Not authenticated — please sign in again.");
 
@@ -140,34 +207,28 @@ export default function DashboardPage() {
         throw new Error(body.error || `Delete failed (${res.status})`);
       }
 
-      // Successfully deleted — remove from local state
-      setStories((prev) => prev.filter((s) => s.id !== id));
+      // Background Refetch: sync pagination details & stats in the background
+      const { stories: data, total, totalPages: pages } = await fetchStories({
+        page: currentPage,
+        limit: PAGE_SIZE,
+        search: searchQuery,
+        status: statusFilter,
+      });
+      setStories(data);
+      setTotalCount(total);
+      setTotalPages(pages);
+
+      const statsData = await fetchStoryStats();
+      setStats(statsData);
     } catch (err: unknown) {
       console.error("Delete error:", err);
+      // Revert optimistic update on failure
+      setStories(originalStories);
+      setTotalCount(originalStories.length);
       const msg = err instanceof Error ? err.message : "Unknown error";
-      alert(`Failed to delete: ${msg}`);
+      setToast({ message: `Failed to delete: ${msg}`, type: "error" });
     }
   };
-
-  const stats = {
-    total: stories.length,
-    draft: stories.filter((s) => s.status === "Draft").length,
-    completed: stories.filter((s) => s.status === "Completed").length,
-  };
-
-  // Filter by search + status tab
-  const filteredStories = stories.filter((s) => {
-    const query = searchQuery.toLowerCase();
-    const matchesSearch =
-      (s.baby_name || "").toLowerCase().includes(query) ||
-      (s.mother_name || "").toLowerCase().includes(query) ||
-      (s.hospital || "").toLowerCase().includes(query) ||
-      (s.doctor_names || []).join(" ").toLowerCase().includes(query) ||
-      (s.birth_date ? formatDate(s.birth_date).toLowerCase() : "").includes(query);
-
-    const matchesStatus = statusFilter === "All" || s.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
 
   const isAdmin = userProfile?.role === "ADMIN";
 
@@ -197,6 +258,9 @@ export default function DashboardPage() {
       ring: "ring-emerald-400",
     },
   ];
+
+  const startRange = totalCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const endRange = Math.min(currentPage * PAGE_SIZE, totalCount);
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-gray-50/50">
@@ -239,7 +303,7 @@ export default function DashboardPage() {
             return (
               <button
                 key={stat.filter}
-                onClick={() => setStatusFilter(stat.filter)}
+                onClick={() => updateUrl(1, stat.filter, searchQuery)}
                 className={`bg-gradient-to-br ${stat.color} rounded-2xl p-6 shadow-sm flex flex-col justify-between border text-left transition-all duration-150 ${
                   isActive
                     ? `ring-2 ${stat.ring} border-transparent shadow-md scale-[1.02]`
@@ -270,9 +334,9 @@ export default function DashboardPage() {
             <input
               type="text"
               id="dashboard-search"
-              placeholder="Search by baby name, mother, doctor or hospital…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by baby, mother, father, doctor or hospital…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3bbfbf] bg-gray-50/50"
             />
           </div>
@@ -282,7 +346,7 @@ export default function DashboardPage() {
             {(["All", "Draft", "Completed"] as StatusFilter[]).map((f) => (
               <button
                 key={f}
-                onClick={() => setStatusFilter(f)}
+                onClick={() => updateUrl(1, f, searchQuery)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   statusFilter === f
                     ? "bg-white text-gray-800 shadow-sm"
@@ -294,19 +358,42 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          <Link
-            href="/create-story"
-            className="bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white text-sm font-semibold rounded-xl px-5 py-2.5 flex items-center justify-center gap-2 shadow-sm hover:shadow transition-all whitespace-nowrap"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            New Story
-          </Link>
+          <div className="flex gap-2">
+            {isAdmin && (
+              <Link
+                href="/register"
+                className="border border-purple-300 text-purple-600 hover:bg-purple-50 text-sm font-semibold rounded-xl px-4 py-2.5 flex items-center justify-center gap-2 transition-all whitespace-nowrap"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                  <path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0" />
+                  <path d="M16 19h6" />
+                  <path d="M19 16v6" />
+                  <path d="M6 21v-2a4 4 0 0 1 4 -4h4" />
+                </svg>
+                Add Staff
+              </Link>
+            )}
+            <Link
+              href="/create-story"
+              className="bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white text-sm font-semibold rounded-xl px-5 py-2.5 flex items-center justify-center gap-2 shadow-sm hover:shadow transition-all whitespace-nowrap"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              New Story
+            </Link>
+          </div>
         </div>
 
         {/* Table */}
-        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow border border-gray-100 overflow-hidden flex-1">
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow border border-gray-100 overflow-hidden flex-1 relative">
+          {/* Skeletons overlay during fetch */}
+          {loading && stories.length > 0 && (
+            <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] flex items-center justify-center z-10">
+              <div className="w-8 h-8 border-4 border-[#3bbfbf] border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -314,7 +401,6 @@ export default function DashboardPage() {
                   <th className="py-3.5 px-5">
                     <span className="flex items-center gap-1.5">
                       Baby
-                      {/* gender legend */}
                       <span className="flex items-center gap-1 font-normal normal-case text-[10px] text-gray-400 ml-1">
                         <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" title="Boy" />
                         <span className="hidden sm:inline">Boy</span>
@@ -332,9 +418,9 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-sm">
-                {loading ? (
+                {loading && stories.length === 0 ? (
                   Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} />)
-                ) : filteredStories.length === 0 ? (
+                ) : stories.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-3 text-gray-400">
@@ -342,18 +428,18 @@ export default function DashboardPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                         </svg>
                         <p className="font-semibold text-gray-500">
-                          {searchQuery ? `No stories matching "${searchQuery}"` : `No ${statusFilter === "All" ? "" : statusFilter + " "}stories yet`}
+                          {searchQuery ? `No stories matching "${searchQuery}"` : "No stories found."}
                         </p>
                         <p className="text-xs">
                           {searchQuery
                             ? "Try a different search term or clear the filter."
-                            : "Click \"New Story\" to create your first birth story keepsake."}
+                            : "Create your first Birth Story."}
                         </p>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  filteredStories.map((story) => {
+                  stories.map((story) => {
                     const isFemale = story.gender === "female";
                     const isCompleted = story.status === "Completed";
                     const babyName = story.baby_name?.trim() || "";
@@ -412,7 +498,6 @@ export default function DashboardPage() {
                         {/* Actions */}
                         <td className="py-3.5 px-5">
                           <div className="flex items-center justify-end gap-1">
-
                             {/* Edit */}
                             <Link
                               href={`/create-story?id=${story.id}`}
@@ -431,7 +516,7 @@ export default function DashboardPage() {
                               <IconEye />
                             </Link>
 
-                            {/* History — enabled only for Completed */}
+                            {/* History */}
                             {isCompleted ? (
                               <button
                                 onClick={() => setActiveHistoryStory({ id: story.id!, name: displayName })}
@@ -446,7 +531,7 @@ export default function DashboardPage() {
                               </span>
                             )}
 
-                            {/* PDF — enabled only when url exists */}
+                            {/* PDF */}
                             {story.latest_pdf_url ? (
                               <a
                                 href={story.latest_pdf_url}
@@ -463,7 +548,7 @@ export default function DashboardPage() {
                               </span>
                             )}
 
-                            {/* Delete — ADMIN only */}
+                            {/* Delete */}
                             {isAdmin && (
                               <button
                                 onClick={() => handleDelete(story.id!)}
@@ -483,25 +568,39 @@ export default function DashboardPage() {
             </table>
           </div>
 
-          {/* Table footer — row count */}
-          {!loading && filteredStories.length > 0 && (
-            <div className="border-t border-gray-100 px-5 py-2.5 flex items-center justify-between">
+          {/* Table footer — row count & pagination controls */}
+          {!loading && stories.length > 0 && (
+            <div className="border-t border-gray-100 px-5 py-3.5 flex items-center justify-between">
               <p className="text-xs text-gray-400">
-                Showing <span className="font-semibold text-gray-600">{filteredStories.length}</span> of{" "}
-                <span className="font-semibold text-gray-600">{stories.length}</span> stories
+                Showing <span className="font-semibold text-gray-600">{startRange}–{endRange}</span> of{" "}
+                <span className="font-semibold text-gray-600">{totalCount}</span> stories
               </p>
-              {statusFilter !== "All" && (
+              
+              <div className="flex gap-2">
                 <button
-                  onClick={() => setStatusFilter("All")}
-                  className="text-xs text-[#3bbfbf] hover:underline font-medium"
+                  disabled={currentPage === 1 || loading}
+                  onClick={() => updateUrl(currentPage - 1, statusFilter, searchQuery)}
+                  className="px-3.5 py-1.5 text-xs font-semibold border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
                 >
-                  Clear filter
+                  Previous
                 </button>
-              )}
+                <button
+                  disabled={currentPage >= totalPages || loading}
+                  onClick={() => updateUrl(currentPage + 1, statusFilter, searchQuery)}
+                  className="px-3.5 py-1.5 text-xs font-semibold border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </div>
       </main>
+
+      {/* Toast */}
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
 
       {/* Version History Modal */}
       {activeHistoryStory && (
@@ -578,5 +677,20 @@ function VersionHistoryModal({ storyId, babyName, onClose }: { storyId: string; 
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50/50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-[#3bbfbf] border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm font-semibold text-gray-500">Loading dashboard...</p>
+        </div>
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
   );
 }

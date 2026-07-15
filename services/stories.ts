@@ -43,14 +43,72 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
 }
 
 
-export async function fetchStories() {
-  const { data, error } = await supabase
+export async function fetchStories(options?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+}) {
+  const page = options?.page ?? 1;
+  const limit = options?.limit ?? 10;
+  const search = options?.search ?? "";
+  const status = options?.status ?? "All";
+
+  let query = supabase
     .from("stories")
-    .select("*")
+    .select("*", { count: "exact" })
     .order("created_at", { ascending: false });
 
+  if (status !== "All") {
+    query = query.eq("status", status);
+  }
+
+  if (search) {
+    const searchVal = `%${search}%`;
+    query = query.or(`baby_name.ilike.${searchVal},mother_name.ilike.${searchVal},father_name.ilike.${searchVal},hospital.ilike.${searchVal}`);
+  }
+
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  const { data, error, count } = await query.range(from, to);
+
   if (error) throw error;
-  return data as Story[];
+
+  const total = count ?? 0;
+  const totalPages = Math.ceil(total / limit);
+
+  return {
+    stories: data as Story[],
+    total,
+    totalPages,
+    page,
+    limit,
+  };
+}
+
+export async function fetchStoryStats() {
+  const { count: total, error: err1 } = await supabase
+    .from("stories")
+    .select("*", { count: "exact", head: true });
+
+  const { count: draft, error: err2 } = await supabase
+    .from("stories")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "Draft");
+
+  const { count: completed, error: err3 } = await supabase
+    .from("stories")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "Completed");
+
+  if (err1 || err2 || err3) throw err1 || err2 || err3;
+
+  return {
+    total: total ?? 0,
+    draft: draft ?? 0,
+    completed: completed ?? 0,
+  };
 }
 
 export async function fetchStoryById(id: string) {
