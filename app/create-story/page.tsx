@@ -7,8 +7,32 @@ import { useStory } from "@/context/StoryContext";
 import { getCurrentUserProfile } from "@/services/stories";
 import Toast from "@/components/Toast";
 
-const toTitleCase = (str: string) =>
-  str.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+const toTitleCase = (str: string) => {
+  return str
+    .split(" ")
+    .map(word => {
+      // Slashes (e.g. B/O, S/O, W/O)
+      if (word.includes("/")) {
+        return word.split("/").map(part => {
+          const lower = part.toLowerCase();
+          if (lower === "o") return "O";
+          if (lower === "s") return "S";
+          if (lower === "w") return "W";
+          return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+        }).join("/");
+      }
+      // Single Quote (e.g. O'Connor)
+      if (word.includes("'")) {
+        return word.split("'").map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()).join("'");
+      }
+      // Dash (e.g. double-barrelled)
+      if (word.includes("-")) {
+        return word.split("-").map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()).join("-");
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
+};
 
 const capitalizedFields = [
   "babyName", "motherName", "fatherName",
@@ -182,7 +206,8 @@ function CreateStoryContent() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    const cleaned = nameOnlyFields.includes(name) ? value.replace(/[^a-zA-Z\s]/g, "") : value;
+    // Allow A-Z, /, -, ', and space
+    const cleaned = nameOnlyFields.includes(name) ? value.replace(/[^a-zA-Z\s\/\-']/g, "") : value;
     setForm((f) => ({
       ...f,
       [name]: capitalizedFields.includes(name) ? toTitleCase(cleaned) : cleaned,
@@ -228,6 +253,24 @@ function CreateStoryContent() {
     }
   };
 
+  const handleSubmitApproval = async () => {
+    if (missingFields.length > 0) {
+      setShowErrors(true);
+      setToast({ message: "Please fill in all required fields.", type: "error" });
+      return;
+    }
+    try {
+      const savedId = await saveStoryToDb("Pending Approval");
+      setToast({ message: "Story submitted for approval!", type: "success" });
+      setTimeout(() => router.push("/dashboard"), 1500);
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : "";
+      if (!msg.startsWith("Please enter")) {
+        setToast({ message: "Failed to submit story. Please try again.", type: "error" });
+      }
+    }
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -235,6 +278,8 @@ function CreateStoryContent() {
     reader.onload = () => setBabyImage(reader.result as string);
     reader.readAsDataURL(file);
   };
+
+  const isReadOnly = form.status === "Pending Approval" || form.status === "Approved" || form.status === "Completed";
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -259,9 +304,22 @@ function CreateStoryContent() {
           )}
         </div>
 
+        {/* Rejection Warning Banner */}
+        {form.status === "Rejected" && form.rejection_reason && (
+          <div className="mb-6 flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-5 py-3.5 rounded-xl shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 shrink-0 text-red-500">
+              <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            </svg>
+            <div>
+              <p className="text-sm font-bold">⚠️ Rejected: {form.rejection_reason}</p>
+              <p className="text-xs text-red-600 mt-0.5">Please correct the details and resubmit for approval.</p>
+            </div>
+          </div>
+        )}
+
         {/* Validation Error Banner */}
         {validationError && (
-          <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-5 py-3.5 rounded-xl shadow-sm animate-[slideDown_0.3s_ease-out]">
+          <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-5 py-3.5 rounded-xl shadow-sm animate-[slideDown_0.3s_ease-out] mb-6">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 shrink-0 text-red-400">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
             </svg>
@@ -276,6 +334,7 @@ function CreateStoryContent() {
         )}
 
         <form className="bg-white/90 backdrop-blur-sm rounded-2xl shadow p-6 sm:p-8 flex flex-col gap-6" onSubmit={(e) => e.preventDefault()}>
+          <fieldset disabled={isReadOnly} className="flex flex-col gap-6 w-full">
 
           {/* Gender toggle */}
           <div className="flex items-center justify-center gap-4">
@@ -318,7 +377,7 @@ function CreateStoryContent() {
             <div className="flex flex-col lg:flex-row gap-6">
               <div
                 className={`w-full lg:w-64 h-[320px] flex-shrink-0 rounded-xl overflow-hidden shadow border-2 border-dashed ${uploadBorder} cursor-pointer group relative`}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => !isReadOnly && fileInputRef.current?.click()}
               >
                 <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={handleImageChange} />
                 {babyImage ? (
@@ -326,11 +385,13 @@ function CreateStoryContent() {
                 ) : (
                   <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 ${uploadBg} transition-colors p-4`}>
                     <Image src="/icon.png" alt="Upload" width={48} height={48} className="object-contain" />
-                    <p className={`text-sm font-semibold ${uploadText} text-center`}>Upload Baby Photo</p>
-                    <p className="text-xs text-gray-400 text-center">Supported formats: JPG, JPEG, PNG, WEBP</p>
+                    <p className={`text-sm font-semibold ${uploadText} text-center`}>
+                      {isReadOnly ? "No photo uploaded" : "Upload Baby Photo"}
+                    </p>
+                    {!isReadOnly && <p className="text-xs text-gray-400 text-center">Supported formats: JPG, JPEG, PNG, WEBP</p>}
                   </div>
                 )}
-                {babyImage && (
+                {!isReadOnly && babyImage && (
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <p className="text-white text-sm font-semibold">Change Photo</p>
                   </div>
@@ -552,6 +613,8 @@ function CreateStoryContent() {
             </div>
           </section>
 
+          </fieldset>
+
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <button
               type="button"
@@ -561,14 +624,28 @@ function CreateStoryContent() {
             >
               {loading ? "Saving Story..." : "Preview Story"}
             </button>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={handleSaveDraft}
-              className={`flex-1 font-semibold rounded-lg py-2.5 transition-colors ${btnSecondary} disabled:opacity-60`}
-            >
-              {loading ? "Saving Draft..." : (draftSaved ? "✓ Draft Saved!" : "Save Draft")}
-            </button>
+
+            {!isReadOnly && (
+              <>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={handleSaveDraft}
+                  className={`flex-1 font-semibold rounded-lg py-2.5 transition-colors ${btnSecondary} disabled:opacity-60`}
+                >
+                  {loading ? "Saving Draft..." : (draftSaved ? "✓ Draft Saved!" : "Save Draft")}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={handleSubmitApproval}
+                  className="flex-1 font-semibold rounded-lg py-2.5 text-white transition-colors bg-amber-500 hover:bg-amber-600 disabled:opacity-60 cursor-pointer"
+                >
+                  {loading ? "Submitting..." : "Submit for Approval"}
+                </button>
+              </>
+            )}
           </div>
         </form>
       </main>

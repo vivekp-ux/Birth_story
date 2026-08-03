@@ -551,23 +551,35 @@ function PdfPreviewPageContent() {
     );
   }
 
+  const isApproved = form.status === "Approved" || form.status === "Completed";
+
   return (
     <div className="min-h-screen print-root">
       <header className="bg-white shadow-sm px-4 sm:px-8 py-4 flex items-center justify-between gap-4 print:hidden">
         <Link href={form.id ? `/verification?id=${form.id}` : "/verification"} className="flex items-center gap-1 px-4 py-2 rounded-lg border border-[#3bbfbf] text-[#3bbfbf] text-sm font-medium hover:bg-[#e8f7f7] transition-colors">← Back</Link>
         
-        {statusMessage && (
+        {statusMessage ? (
           <span className="text-xs text-[#0da1b8] font-semibold animate-pulse">{statusMessage}</span>
+        ) : (
+          !isApproved && (
+            <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full font-bold animate-pulse">
+              Waiting for Centre Approval
+            </span>
+          )
         )}
 
         <div className="flex gap-2">
-          <button onClick={handlePrint} className={`text-sm font-semibold px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors`}>
-            Print Booklet
+          <button
+            onClick={handlePrint}
+            disabled={!isApproved}
+            className={`text-sm font-semibold px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {isApproved ? "Print Birth Story" : "Print Booklet"}
           </button>
           <button
             onClick={handleDownloadPdf}
-            disabled={downloading}
-            className={`text-sm font-semibold px-5 py-2 rounded-lg transition-colors ${btnClass} disabled:opacity-60`}
+            disabled={downloading || !isApproved}
+            className={`text-sm font-semibold px-5 py-2 rounded-lg transition-colors ${btnClass} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {downloading ? "Saving PDF..." : "Download & Save PDF"}
           </button>

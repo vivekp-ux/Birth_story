@@ -48,6 +48,7 @@ export async function fetchStories(options?: {
   limit?: number;
   search?: string;
   status?: string;
+  hospital?: string;
 }) {
   const page = options?.page ?? 1;
   const limit = options?.limit ?? 10;
@@ -64,6 +65,10 @@ export async function fetchStories(options?: {
 
   if (status !== "All") {
     query = query.eq("status", status);
+  }
+
+  if (options?.hospital) {
+    query = query.eq("hospital", options.hospital);
   }
 
   const { data, error } = await query;
@@ -100,26 +105,42 @@ export async function fetchStories(options?: {
   };
 }
 
-export async function fetchStoryStats() {
-  const { count: total, error: err1 } = await supabase
-    .from("stories")
-    .select("*", { count: "exact", head: true });
+export async function fetchStoryStats(hospital?: string) {
+  let qTotal = supabase.from("stories").select("*", { count: "exact", head: true });
+  let qDraft = supabase.from("stories").select("*", { count: "exact", head: true }).eq("status", "Draft");
+  let qPending = supabase.from("stories").select("*", { count: "exact", head: true }).eq("status", "Pending Approval");
+  let qApproved = supabase.from("stories").select("*", { count: "exact", head: true }).eq("status", "Approved");
+  let qRejected = supabase.from("stories").select("*", { count: "exact", head: true }).eq("status", "Rejected");
+  let qCompleted = supabase.from("stories").select("*", { count: "exact", head: true }).eq("status", "Completed");
 
-  const { count: draft, error: err2 } = await supabase
-    .from("stories")
-    .select("*", { count: "exact", head: true })
-    .eq("status", "Draft");
+  if (hospital) {
+    qTotal = qTotal.eq("hospital", hospital);
+    qDraft = qDraft.eq("hospital", hospital);
+    qPending = qPending.eq("hospital", hospital);
+    qApproved = qApproved.eq("hospital", hospital);
+    qRejected = qRejected.eq("hospital", hospital);
+    qCompleted = qCompleted.eq("hospital", hospital);
+  }
 
-  const { count: completed, error: err3 } = await supabase
-    .from("stories")
-    .select("*", { count: "exact", head: true })
-    .eq("status", "Completed");
+  const [
+    { count: total, error: err1 },
+    { count: draft, error: err2 },
+    { count: pending, error: err3 },
+    { count: approved, error: err4 },
+    { count: rejected, error: err5 },
+    { count: completed, error: err6 },
+  ] = await Promise.all([qTotal, qDraft, qPending, qApproved, qRejected, qCompleted]);
 
-  if (err1 || err2 || err3) throw err1 || err2 || err3;
+  if (err1 || err2 || err3 || err4 || err5 || err6) {
+    throw err1 || err2 || err3 || err4 || err5 || err6;
+  }
 
   return {
     total: total ?? 0,
     draft: draft ?? 0,
+    pending: pending ?? 0,
+    approved: approved ?? 0,
+    rejected: rejected ?? 0,
     completed: completed ?? 0,
   };
 }

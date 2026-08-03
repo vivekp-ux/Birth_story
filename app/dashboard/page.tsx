@@ -8,7 +8,18 @@ import { Story, UserProfile, PdfVersion } from "@/types/story";
 import { fetchStories, getCurrentUserProfile, fetchPdfVersions, fetchStoryStats } from "@/services/stories";
 import Toast from "@/components/Toast";
 
-type StatusFilter = "All" | "Draft" | "Completed" | "Archived";
+type StatusFilter = "All" | "Draft" | "Pending Approval" | "Approved" | "Rejected" | "Completed" | "Archived";
+
+const BRANCHES = [
+  "Banashankari",
+  "HSR Layout",
+  "Kalyan Nagar",
+  "Hennur Road",
+  "Bhattarahalli",
+  "Budigere Cross",
+  "Hoskote",
+  "Hosur"
+];
 
 // Formats "2026-05-09" → "9th May 2026"
 function formatDate(dateStr: string): string {
@@ -91,15 +102,20 @@ function DashboardContent() {
 
   // Read params directly from the URL (source of truth)
   const currentPage = Number(searchParams.get("page") || "1");
-  const statusFilter = (searchParams.get("status") || "All") as StatusFilter;
   const searchQuery = searchParams.get("search") || "";
+  const selectedBranch = searchParams.get("branch") || "All";
 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  
+  // Set default status filter based on role (default to Pending Approval for APPROVER)
+  const defaultStatus = userProfile?.role === "APPROVER" ? "Pending Approval" : "All";
+  const statusFilter = (searchParams.get("status") || defaultStatus) as StatusFilter;
+
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [stats, setStats] = useState({ total: 0, draft: 0, completed: 0 });
+  const [stats, setStats] = useState({ total: 0, draft: 0, pending: 0, approved: 0, rejected: 0, completed: 0 });
   const [activeHistoryStory, setActiveHistoryStory] = useState<{ id: string; name: string } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   // Search input state to allow typing without triggering fetches on every keystroke
@@ -122,20 +138,32 @@ function DashboardContent() {
     return () => clearTimeout(handler);
   }, [searchInput]);
 
-  const updateUrl = (pageVal: number, statusVal: string, searchVal: string) => {
+  const updateUrl = (pageVal: number, statusVal: string, searchVal: string, branchVal?: string) => {
     const params = new URLSearchParams();
     if (pageVal > 1) {
       params.set("page", String(pageVal));
     }
-    if (statusVal !== "All") {
-      params.set("status", statusVal);
+    const targetStatus = statusVal || statusFilter;
+    if (targetStatus !== "All") {
+      params.set("status", targetStatus);
     }
     if (searchVal.trim()) {
       params.set("search", searchVal.trim());
     }
+    const branchToUse = branchVal ?? selectedBranch;
+    if (branchToUse && branchToUse !== "All") {
+      params.set("branch", branchToUse);
+    }
     const queryStr = params.toString();
     router.replace(queryStr ? `/dashboard?${queryStr}` : "/dashboard");
   };
+
+  // Redirect APPROVER to Pending Approval if no status is specified
+  useEffect(() => {
+    if (userProfile && !searchParams.get("status") && userProfile.role === "APPROVER") {
+      updateUrl(currentPage, "Pending Approval", searchQuery);
+    }
+  }, [userProfile]);
 
   // Load data when URL params change
   useEffect(() => {
@@ -152,18 +180,23 @@ function DashboardContent() {
           setUserProfile(profile);
         }
 
+        const targetHospital = (profile.role === "ADMIN")
+          ? (selectedBranch === "All" ? undefined : selectedBranch)
+          : (profile.assigned_centre || undefined);
+
         const { stories: data, total, totalPages: pages } = await fetchStories({
           page: currentPage,
           limit: PAGE_SIZE,
           search: searchQuery,
           status: statusFilter,
+          hospital: targetHospital,
         });
 
         setStories(data);
         setTotalCount(total);
         setTotalPages(pages);
 
-        const statsData = await fetchStoryStats();
+        const statsData = await fetchStoryStats(targetHospital);
         setStats(statsData);
       } catch (err) {
         console.error("Load stories / stats error:", err);
@@ -172,7 +205,7 @@ function DashboardContent() {
       }
     };
     loadData();
-  }, [currentPage, statusFilter, searchQuery]);
+  }, [currentPage, statusFilter, searchQuery, selectedBranch]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -208,17 +241,22 @@ function DashboardContent() {
       }
 
       // Background Refetch: sync pagination details & stats in the background
+      const targetHospital = (userProfile?.role === "ADMIN")
+        ? (selectedBranch === "All" ? undefined : selectedBranch)
+        : (userProfile?.assigned_centre || undefined);
+
       const { stories: data, total, totalPages: pages } = await fetchStories({
         page: currentPage,
         limit: PAGE_SIZE,
         search: searchQuery,
         status: statusFilter,
+        hospital: targetHospital,
       });
       setStories(data);
       setTotalCount(total);
       setTotalPages(pages);
 
-      const statsData = await fetchStoryStats();
+      const statsData = await fetchStoryStats(targetHospital);
       setStats(statsData);
     } catch (err: unknown) {
       console.error("Delete error:", err);
@@ -230,34 +268,138 @@ function DashboardContent() {
     }
   };
 
+  const handleExportCSV = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("stories")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      let filteredStories = data as Story[];
+      if (selectedBranch !== "All") {
+        filteredStories = filteredStories.filter(s => s.hospital === selectedBranch);
+      }
+
+      const headers = [
+        "Baby Name", "Gender", "Birth Date", "Birth Time", "Birth Weight", "Height",
+        "First Cry Time", "Hospital", "Mother Name", "Father Name", "Room Type",
+        "Check-in Date", "Status", "Submitted At", "Approved By", "Approved At"
+      ];
+
+      const rows = filteredStories.map(s => [
+        s.baby_name || "",
+        s.gender || "",
+        s.birth_date || "",
+        s.birth_time || "",
+        s.birth_weight || "",
+        s.height || "",
+        s.first_cry_time || "",
+        s.hospital || "",
+        s.mother_name || "",
+        s.father_name || "",
+        s.room_type || "",
+        s.checkin_date || "",
+        s.status || "",
+        s.submitted_at || "",
+        s.approved_by || "",
+        s.approved_at || ""
+      ]);
+
+      // Simple CSV escaping and conversion
+      const csvContent = "\uFEFF" + [
+        headers.join(","),
+        ...rows.map(row => row.map(val => {
+          const str = String(val ?? "");
+          return `"${str.replace(/"/g, '""')}"`;
+        }).join(","))
+      ].join("\r\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `birth_stories_${selectedBranch.toLowerCase().replace(/\s+/g, "_")}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setToast({ message: "Export completed successfully!", type: "success" });
+    } catch (err) {
+      console.error("Export error:", err);
+      setToast({ message: "Failed to export data.", type: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const isAdmin = userProfile?.role === "ADMIN";
 
-  const statCards = [
-    {
+  const getStatCards = () => {
+    const list = [];
+    list.push({
       label: "Total Stories",
       count: stats.total,
       filter: "All" as StatusFilter,
       color: "from-[#e0f7f7] to-[#bbf0f0]",
       text: "text-[#1d7b7b]",
       ring: "ring-[#3bbfbf]",
-    },
-    {
-      label: "Draft Stories",
-      count: stats.draft,
-      filter: "Draft" as StatusFilter,
+    });
+
+    if (userProfile?.role !== "APPROVER") {
+      list.push({
+        label: "Draft Stories",
+        count: stats.draft,
+        filter: "Draft" as StatusFilter,
+        color: "from-gray-100 to-gray-200",
+        text: "text-gray-600",
+        ring: "ring-gray-300",
+      });
+    }
+
+    list.push({
+      label: "Pending Approval",
+      count: stats.pending,
+      filter: "Pending Approval" as StatusFilter,
       color: "from-[#fff3e0] to-[#ffe0b2]",
       text: "text-[#e65100]",
       ring: "ring-amber-400",
-    },
-    {
+    });
+
+    list.push({
+      label: "Approved Stories",
+      count: stats.approved,
+      filter: "Approved" as StatusFilter,
+      color: "from-teal-50 to-teal-100",
+      text: "text-teal-700",
+      ring: "ring-teal-400",
+    });
+
+    if (userProfile?.role !== "APPROVER") {
+      list.push({
+        label: "Rejected Stories",
+        count: stats.rejected,
+        filter: "Rejected" as StatusFilter,
+        color: "from-red-50 to-red-100",
+        text: "text-red-700",
+        ring: "ring-red-400",
+      });
+    }
+
+    list.push({
       label: "Completed Booklets",
       count: stats.completed,
       filter: "Completed" as StatusFilter,
       color: "from-[#e8f5e9] to-[#c8e6c9]",
       text: "text-[#2e7d32]",
       ring: "ring-emerald-400",
-    },
-  ];
+    });
+
+    return list;
+  };
+
+  const statCards = getStatCards();
 
   const startRange = totalCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const endRange = Math.min(currentPage * PAGE_SIZE, totalCount);
@@ -274,9 +416,11 @@ function DashboardContent() {
               <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${
                 isAdmin
                   ? "bg-purple-50 border-purple-200 text-purple-700"
+                  : userProfile.role === "APPROVER"
+                  ? "bg-blue-50 border-blue-200 text-blue-700"
                   : "bg-teal-50 border-teal-200 text-teal-700"
               }`}>
-                {userProfile.role}
+                {userProfile.role} {userProfile.assigned_centre ? `(${userProfile.assigned_centre})` : ""}
               </span>
             </div>
           )}
@@ -293,11 +437,18 @@ function DashboardContent() {
         {/* Welcome */}
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Welcome Back, {userProfile?.name || "…"}!</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Create, review, and print birth story keepsakes for newborn mothers.</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {userProfile?.role === "APPROVER" 
+              ? `Review and verify birth story keepsakes for the ${userProfile.assigned_centre} branch.`
+              : userProfile?.role === "STAFF"
+              ? `Create and submit birth story keepsakes for the ${userProfile.assigned_centre} branch.`
+              : "Create, review, and print birth story keepsakes for newborn mothers."
+            }
+          </p>
         </div>
 
         {/* Stat Cards — clickable filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {statCards.map((stat) => {
             const isActive = statusFilter === stat.filter;
             return (
@@ -342,8 +493,11 @@ function DashboardContent() {
           </div>
 
           {/* Status filter tabs */}
-          <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-            {(["All", "Draft", "Completed"] as StatusFilter[]).map((f) => (
+          <div className="flex flex-wrap gap-1 bg-gray-100 rounded-xl p-1">
+            {(userProfile?.role === "APPROVER"
+              ? ["Pending Approval", "Approved", "Completed", "All"]
+              : ["All", "Draft", "Pending Approval", "Approved", "Rejected", "Completed"]
+            ).map((f) => (
               <button
                 key={f}
                 onClick={() => updateUrl(1, f, searchQuery)}
@@ -358,7 +512,32 @@ function DashboardContent() {
             ))}
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {isAdmin && (
+              <select
+                value={selectedBranch}
+                onChange={(e) => updateUrl(1, statusFilter, searchQuery, e.target.value)}
+                className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3bbfbf] bg-white text-gray-700 font-semibold"
+              >
+                <option value="All">All Branches</option>
+                {BRANCHES.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            )}
+
+            {isAdmin && (
+              <button
+                onClick={handleExportCSV}
+                className="border border-emerald-300 text-emerald-600 hover:bg-emerald-50 text-sm font-semibold rounded-xl px-4 py-2.5 flex items-center justify-center gap-2 transition-all whitespace-nowrap cursor-pointer"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                Export Excel
+              </button>
+            )}
+
             {isAdmin && (
               <Link
                 href="/register"
@@ -373,15 +552,18 @@ function DashboardContent() {
                 Add Staff
               </Link>
             )}
-            <Link
-              href="/create-story"
-              className="bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white text-sm font-semibold rounded-xl px-5 py-2.5 flex items-center justify-center gap-2 shadow-sm hover:shadow transition-all whitespace-nowrap"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              New Story
-            </Link>
+
+            {userProfile?.role !== "APPROVER" && (
+              <Link
+                href="/create-story"
+                className="bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white text-sm font-semibold rounded-xl px-5 py-2.5 flex items-center justify-center gap-2 shadow-sm hover:shadow transition-all whitespace-nowrap"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                New Story
+              </Link>
+            )}
           </div>
         </div>
 
@@ -410,6 +592,7 @@ function DashboardContent() {
                     </span>
                   </th>
                   <th className="py-3.5 px-5">Mother</th>
+                  <th className="py-3.5 px-5">Branch</th>
                   <th className="py-3.5 px-5">Doctor</th>
                   <th className="py-3.5 px-5">Birth Date</th>
                   <th className="py-3.5 px-5">Created</th>
@@ -454,15 +637,27 @@ function DashboardContent() {
                               title={isFemale ? "Girl" : "Boy"}
                               className={`w-2.5 h-2.5 rounded-full shrink-0 ${isFemale ? "bg-pink-400" : "bg-blue-400"}`}
                             />
-                            <span className={!babyName ? "text-gray-400 italic font-normal" : ""}>
-                              {displayName}
-                            </span>
+                            <div className="flex flex-col">
+                              <span className={!babyName ? "text-gray-400 italic font-normal" : ""}>
+                                {displayName}
+                              </span>
+                              {story.status === "Rejected" && story.rejection_reason && (
+                                <span className="text-[11px] text-red-500 font-medium bg-red-50/50 border border-red-100 rounded px-1.5 py-0.5 mt-0.5 w-max">
+                                  Reason: {story.rejection_reason}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
 
                         {/* Mother */}
                         <td className="py-3.5 px-5 text-gray-600">
                           {story.mother_name || <span className="text-gray-300">—</span>}
+                        </td>
+
+                        {/* Branch */}
+                        <td className="py-3.5 px-5 text-gray-600 font-medium">
+                          {story.hospital || <span className="text-gray-300">—</span>}
                         </td>
 
                         {/* Doctor */}
@@ -487,9 +682,15 @@ function DashboardContent() {
                           <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${
                             story.status === "Completed"
                               ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                              : story.status === "Approved"
+                              ? "bg-teal-50 border-teal-200 text-teal-700"
+                              : story.status === "Pending Approval"
+                              ? "bg-amber-50 border-amber-200 text-amber-700"
+                              : story.status === "Rejected"
+                              ? "bg-red-50 border-red-200 text-red-700"
                               : story.status === "Archived"
                               ? "bg-gray-100 border-gray-200 text-gray-500"
-                              : "bg-amber-50 border-amber-200 text-amber-700"
+                              : "bg-gray-50 border-gray-200 text-gray-600"
                           }`}>
                             {story.status || "Draft"}
                           </span>
@@ -497,24 +698,41 @@ function DashboardContent() {
 
                         {/* Actions */}
                         <td className="py-3.5 px-5">
-                          <div className="flex items-center justify-end gap-1">
-                            {/* Edit */}
-                            <Link
-                              href={`/create-story?id=${story.id}`}
-                              title="Edit story"
-                              className="p-1.5 rounded-lg text-[#3bbfbf] hover:bg-[#e0f7f7] transition-colors"
-                            >
-                              <IconEdit />
-                            </Link>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* Edit / Review */}
+                            {userProfile?.role === "APPROVER" ? (
+                              <Link
+                                href={`/verification?id=${story.id}`}
+                                className="px-3 py-1.5 bg-[#3bbfbf] hover:bg-[#2ea8a8] text-white text-xs font-bold rounded-lg transition-all shadow-sm"
+                              >
+                                Review
+                              </Link>
+                            ) : (
+                              <>
+                                {(isAdmin || (userProfile?.role === "STAFF" && (story.status === "Draft" || story.status === "Rejected"))) ? (
+                                  <Link
+                                    href={`/create-story?id=${story.id}`}
+                                    title="Edit story"
+                                    className="p-1.5 rounded-lg text-[#3bbfbf] hover:bg-[#e0f7f7] transition-colors"
+                                  >
+                                    <IconEdit />
+                                  </Link>
+                                ) : (
+                                  <span title="Editing disabled after submission" className="p-1.5 rounded-lg text-gray-200 cursor-not-allowed">
+                                    <IconEdit />
+                                  </span>
+                                )}
 
-                            {/* Preview */}
-                            <Link
-                              href={`/verification?id=${story.id}`}
-                              title="Preview story"
-                              className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-                            >
-                              <IconEye />
-                            </Link>
+                                {/* Preview */}
+                                <Link
+                                  href={`/verification?id=${story.id}`}
+                                  title="Preview story"
+                                  className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                                >
+                                  <IconEye />
+                                </Link>
+                              </>
+                            )}
 
                             {/* History */}
                             {isCompleted ? (
@@ -526,9 +744,11 @@ function DashboardContent() {
                                 <IconHistory />
                               </button>
                             ) : (
-                              <span title="PDF history available after completion" className="p-1.5 rounded-lg text-gray-200 cursor-not-allowed">
-                                <IconHistory />
-                              </span>
+                              userProfile?.role !== "APPROVER" && (
+                                <span title="PDF history available after completion" className="p-1.5 rounded-lg text-gray-200 cursor-not-allowed">
+                                  <IconHistory />
+                                </span>
+                              )
                             )}
 
                             {/* PDF */}
@@ -543,9 +763,11 @@ function DashboardContent() {
                                 <IconPdf />
                               </a>
                             ) : (
-                              <span title="PDF available after story is completed" className="p-1.5 rounded-lg text-gray-200 cursor-not-allowed">
-                                <IconPdf />
-                              </span>
+                              userProfile?.role !== "APPROVER" && (
+                                <span title="PDF available after story is completed" className="p-1.5 rounded-lg text-gray-200 cursor-not-allowed">
+                                  <IconPdf />
+                                </span>
+                              )
                             )}
 
                             {/* Delete */}

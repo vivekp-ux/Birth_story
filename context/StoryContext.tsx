@@ -37,7 +37,11 @@ export interface StoryForm {
   storyImage: string | null;
   photo_url?: string | null;
   latest_pdf_url?: string | null;
-  status?: "Draft" | "Completed" | "Archived";
+  status?: "Draft" | "Pending Approval" | "Approved" | "Rejected" | "Completed" | "Archived";
+  rejection_reason?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  submitted_at?: string | null;
 }
 
 interface StoryContextType {
@@ -51,7 +55,7 @@ interface StoryContextType {
   storyId: string | null;
   setStoryId: (id: string | null) => void;
   loadStoryFromDb: (id: string) => Promise<void>;
-  saveStoryToDb: (status: "Draft" | "Completed" | "Archived") => Promise<string>;
+  saveStoryToDb: (status: "Draft" | "Pending Approval" | "Approved" | "Rejected" | "Completed" | "Archived") => Promise<string>;
   loading: boolean;
   validationError: string | null;
   clearValidationError: () => void;
@@ -70,6 +74,10 @@ const INITIAL: StoryForm = {
   paternalGrandmother: "", paternalGrandfather: "",
   otherFamily: "", gender: "", storyImage: null,
   status: "Draft",
+  rejection_reason: "",
+  approved_by: null,
+  approved_at: null,
+  submitted_at: null,
 };
 
 const DRAFT_KEY = "ovum_story_draft";
@@ -138,6 +146,10 @@ export function StoryProvider({ children }: { children: ReactNode }) {
       status: formState.status || "Draft",
       photo_url: formState.photo_url || null,
       latest_pdf_url: formState.latest_pdf_url || null,
+      rejection_reason: formState.rejection_reason || null,
+      approved_by: formState.approved_by || null,
+      approved_at: formState.approved_at || null,
+      submitted_at: formState.submitted_at || null,
     };
   };
 
@@ -176,6 +188,10 @@ export function StoryProvider({ children }: { children: ReactNode }) {
       photo_url: dbStory.photo_url || null,
       latest_pdf_url: dbStory.latest_pdf_url || null,
       status: dbStory.status || "Draft",
+      rejection_reason: dbStory.rejection_reason || "",
+      approved_by: dbStory.approved_by || null,
+      approved_at: dbStory.approved_at || null,
+      submitted_at: dbStory.submitted_at || null,
     };
   };
 
@@ -214,7 +230,7 @@ export function StoryProvider({ children }: { children: ReactNode }) {
     return await res.blob();
   };
 
-  const saveStoryToDb = async (status: "Draft" | "Completed" | "Archived"): Promise<string> => {
+  const saveStoryToDb = async (status: "Draft" | "Pending Approval" | "Approved" | "Rejected" | "Completed" | "Archived"): Promise<string> => {
     // Validate minimum required fields before ANY database save
     const error = validateDraftFields();
     if (error) {
@@ -225,7 +241,18 @@ export function StoryProvider({ children }: { children: ReactNode }) {
 
     setLoading(true);
     try {
-      const updatedForm = { ...form, status };
+      const nowStr = new Date().toISOString();
+      const extra: any = {};
+      if (status === "Pending Approval") {
+        extra.submitted_at = nowStr;
+      } else if (status === "Approved") {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          extra.approved_by = user.id;
+          extra.approved_at = nowStr;
+        }
+      }
+      const updatedForm = { ...form, status, ...extra };
       const dbData = toDbStory(updatedForm);
       
       if (storyId) {
@@ -237,7 +264,7 @@ export function StoryProvider({ children }: { children: ReactNode }) {
       const id = savedStory.id!;
       
       setStoryIdState(id);
-      setForm((f) => ({ ...f, id, status }));
+      setForm((f) => ({ ...f, id, status, ...extra }));
       
       // If there is a new baby photo selected locally (base64)
       if (babyImage && babyImage.startsWith("data:image")) {

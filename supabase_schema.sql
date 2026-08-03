@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('ADMIN', 'STAFF')),
+    role TEXT NOT NULL CHECK (role IN ('ADMIN', 'STAFF', 'APPROVER')),
+    assigned_centre TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -46,12 +47,13 @@ CREATE POLICY "Allow individual writes to own profiles"
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.users (id, name, email, role)
+  INSERT INTO public.users (id, name, email, role, assigned_centre)
   VALUES (
     new.id,
     COALESCE(new.raw_user_meta_data->>'name', 'Keepsake Staff'),
     new.email,
-    COALESCE(new.raw_user_meta_data->>'role', 'STAFF')
+    COALESCE(new.raw_user_meta_data->>'role', 'STAFF'),
+    new.raw_user_meta_data->>'assigned_centre'
   );
   RETURN NEW;
 END;
@@ -104,7 +106,11 @@ CREATE TABLE IF NOT EXISTS public.stories (
     -- Assets & status
     photo_url TEXT,
     latest_pdf_url TEXT,
-    status TEXT CHECK (status IN ('Draft', 'Completed', 'Archived')) DEFAULT 'Draft',
+    status TEXT CHECK (status IN ('Draft', 'Pending Approval', 'Approved', 'Rejected', 'Completed', 'Archived')) DEFAULT 'Draft',
+    rejection_reason TEXT,
+    approved_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    approved_at TIMESTAMP WITH TIME ZONE,
+    submitted_at TIMESTAMP WITH TIME ZONE,
     
     -- Metadata
     created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,

@@ -6,6 +6,17 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserProfile } from "@/services/stories";
 
+const BRANCHES = [
+  "Banashankari",
+  "HSR Layout",
+  "Kalyan Nagar",
+  "Hennur Road",
+  "Bhattarahalli",
+  "Budigere Cross",
+  "Hoskote",
+  "Hosur"
+];
+
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
@@ -23,7 +34,7 @@ function EyeIcon({ open }: { open: boolean }) {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "STAFF" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "STAFF", assigned_centre: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -60,12 +71,22 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
+      const signUpData: any = { name: form.name, role: form.role };
+      if (form.role === "STAFF" || form.role === "APPROVER") {
+        if (!form.assigned_centre) {
+          setError("Please select a branch.");
+          setLoading(false);
+          return;
+        }
+        signUpData.assigned_centre = form.assigned_centre;
+      }
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
         options: {
           emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-          data: { name: form.name, role: form.role },
+          data: signUpData,
         },
       });
 
@@ -159,14 +180,39 @@ export default function RegisterPage() {
             <label className="text-sm font-medium text-gray-600">Role</label>
             <select
               value={form.role}
-              onChange={set("role")}
+              onChange={(e) => {
+                const newRole = e.target.value;
+                setForm((f) => ({
+                  ...f,
+                  role: newRole,
+                  assigned_centre: newRole === "ADMIN" ? "" : f.assigned_centre,
+                }));
+              }}
               className="border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3bbfbf] bg-white"
               required
             >
               <option value="STAFF">Reception / Staff</option>
+              <option value="APPROVER">Approver</option>
               <option value="ADMIN">Admin</option>
             </select>
           </div>
+
+          {(form.role === "STAFF" || form.role === "APPROVER") && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-600">Branch / Centre</label>
+              <select
+                value={form.assigned_centre}
+                onChange={set("assigned_centre")}
+                className="border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3bbfbf] bg-white"
+                required
+              >
+                <option value="">Select a branch</option>
+                {BRANCHES.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <button
             type="submit"

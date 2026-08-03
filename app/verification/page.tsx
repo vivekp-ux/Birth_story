@@ -1,17 +1,24 @@
 "use client";
-import { useEffect, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStory } from "@/context/StoryContext";
 import { getCurrentUserProfile } from "@/services/stories";
+import { UserProfile } from "@/types/story";
+import Toast from "@/components/Toast";
 
 function VerificationPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const idParam = searchParams.get("id");
   
-  const { form, babyImage, loadStoryFromDb, loading } = useStory();
+  const { form, setForm, babyImage, loadStoryFromDb, loading, saveStoryToDb } = useStory();
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [submittingAction, setSubmittingAction] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -20,6 +27,7 @@ function VerificationPageContent() {
         router.push("/login");
         return;
       }
+      setUserProfile(profile);
       if (idParam && (!form.id || form.id !== idParam)) {
         loadStoryFromDb(idParam);
       }
@@ -107,18 +115,264 @@ function VerificationPageContent() {
               )}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 mt-8">
-              <Link href={form.id ? `/pdf-preview?id=${form.id}` : "/pdf-preview"} className={`flex-1 text-center font-semibold rounded-lg py-2.5 text-sm transition-colors ${btnPrimary}`}>
-                Looks Good → Preview PDF
-              </Link>
-              <Link href={form.id ? `/create-story?id=${form.id}` : "/create-story"} className={`flex-1 text-center font-semibold rounded-lg py-2.5 text-sm transition-colors ${btnSecondary}`}>
-                Edit Details
-              </Link>
+            <div className="flex flex-col gap-3 mt-8">
+              {/* Approver Controls */}
+              {userProfile?.role === "APPROVER" && (
+                <>
+                  {form.status === "Pending Approval" ? (
+                    <div className="flex gap-3">
+                      <button
+                        onClick={async () => {
+                          setSubmittingAction(true);
+                          try {
+                            await saveStoryToDb("Approved");
+                            setToast({ message: "Keepsake approved successfully!", type: "success" });
+                            setTimeout(() => router.push("/dashboard"), 1500);
+                          } catch (err: any) {
+                            setToast({ message: "Failed to approve: " + err.message, type: "error" });
+                          } finally {
+                            setSubmittingAction(false);
+                          }
+                        }}
+                        disabled={submittingAction}
+                        className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white font-semibold rounded-lg py-2.5 text-sm transition-colors cursor-pointer"
+                      >
+                        {submittingAction ? "Approving..." : "Approve Keepsake"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setRejectionReason("");
+                          setShowRejectModal(true);
+                        }}
+                        disabled={submittingAction}
+                        className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white font-semibold rounded-lg py-2.5 text-sm transition-colors cursor-pointer"
+                      >
+                        Reject Keepsake
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <div className={`px-4 py-2.5 rounded-lg border text-center font-semibold text-sm ${
+                        form.status === "Approved" || form.status === "Completed"
+                          ? "bg-teal-50 border-teal-200 text-teal-700"
+                          : form.status === "Rejected"
+                          ? "bg-red-50 border-red-200 text-red-700"
+                          : "bg-gray-50 border-gray-200 text-gray-700"
+                      }`}>
+                        Status: {form.status} {form.status === "Rejected" && form.rejection_reason ? `(${form.rejection_reason})` : ""}
+                      </div>
+                      {(form.status === "Approved" || form.status === "Completed") && (
+                        <Link
+                          href={form.id ? `/pdf-preview?id=${form.id}` : "/pdf-preview"}
+                          className={`w-full text-center font-semibold rounded-lg py-2.5 text-sm transition-colors ${btnPrimary}`}
+                        >
+                          View/Print Booklet
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Staff / Admin Controls */}
+              {userProfile?.role !== "APPROVER" && (
+                <>
+                  {form.status === "Pending Approval" && (
+                    <div className="flex flex-col gap-2">
+                      <div className="bg-amber-50 border border-amber-200 text-amber-800 text-center rounded-lg px-4 py-2.5 text-xs font-semibold animate-pulse">
+                        Waiting for Centre Approval
+                      </div>
+                      <Link
+                        href={form.id ? `/pdf-preview?id=${form.id}` : "/pdf-preview"}
+                        className={`w-full text-center font-semibold rounded-lg py-2.5 text-sm transition-colors ${btnSecondary}`}
+                      >
+                        Preview PDF Layout (Print Disabled)
+                      </Link>
+                    </div>
+                  )}
+
+                  {(form.status === "Approved" || form.status === "Completed") && (
+                    <div className="flex flex-col gap-2">
+                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-center rounded-lg px-4 py-2.5 text-xs font-semibold">
+                        Approved - Ready to Print!
+                      </div>
+                      <Link
+                        href={form.id ? `/pdf-preview?id=${form.id}` : "/pdf-preview"}
+                        className={`w-full text-center font-semibold rounded-lg py-2.5 text-sm transition-colors ${btnPrimary}`}
+                      >
+                        Print / Generate Keepsake PDF
+                      </Link>
+                    </div>
+                  )}
+
+                  {(form.status === "Draft" || form.status === "Rejected") && (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            setSubmittingAction(true);
+                            try {
+                              await saveStoryToDb("Pending Approval");
+                              setToast({ message: "Story submitted for approval!", type: "success" });
+                              setTimeout(() => router.push("/dashboard"), 1500);
+                            } catch (err: any) {
+                              setToast({ message: "Submission failed: " + err.message, type: "error" });
+                            } finally {
+                              setSubmittingAction(false);
+                            }
+                          }}
+                          disabled={submittingAction}
+                          className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white font-semibold rounded-lg py-2.5 text-sm transition-colors cursor-pointer"
+                        >
+                          {submittingAction ? "Submitting..." : "Submit for Approval"}
+                        </button>
+
+                        <Link
+                          href={form.id ? `/create-story?id=${form.id}` : "/create-story"}
+                          className={`flex-1 text-center font-semibold rounded-lg py-2.5 text-sm transition-colors ${btnSecondary}`}
+                        >
+                          Edit Details
+                        </Link>
+                      </div>
+
+                      <Link
+                        href={form.id ? `/pdf-preview?id=${form.id}` : "/pdf-preview"}
+                        className="text-center text-xs font-semibold text-gray-500 hover:underline py-1"
+                      >
+                        Preview PDF Layout (Draft)
+                      </Link>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
         </div>
       </main>
+
+      {/* Rejection Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-gray-100 flex flex-col gap-4">
+            <div>
+              <h3 className="font-bold text-gray-800 text-lg">Reject Birth Story</h3>
+              <p className="text-xs text-gray-400 mt-1">Select a reason or enter a custom correction requirement.</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {[
+                "Doctor name mismatch",
+                "Mother name incorrect",
+                "DOB incorrect"
+              ].map((reason) => (
+                <button
+                  key={reason}
+                  onClick={() => setRejectionReason(reason)}
+                  className={`w-full text-left px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                    rejectionReason === reason
+                      ? "bg-red-50 border-red-300 text-red-700"
+                      : "bg-gray-50 border-gray-100 text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Custom Reason</label>
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Enter details about what corrections are required..."
+                rows={3}
+                className="border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400 bg-gray-50/50"
+              />
+            </div>
+
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={async () => {
+                  if (!rejectionReason.trim()) {
+                    setToast({ message: "Please specify a reason.", type: "error" });
+                    return;
+                  }
+                  setSubmittingAction(true);
+                  try {
+                    // Update form state with rejection reason first
+                    setForm((f) => ({ ...f, rejection_reason: rejectionReason }));
+                    
+                    // Call saveStoryToDb with Rejected status
+                    // Note: setForm takes effect after rerender, so let's set it in the payload explicitly
+                    const dbStory = { ...form, status: "Rejected" as const, rejection_reason: rejectionReason };
+                    const dbData = {
+                      baby_name: dbStory.babyName,
+                      gender: dbStory.gender || undefined,
+                      birth_date: dbStory.birthDate || undefined,
+                      birth_time: dbStory.birthTime,
+                      birth_weight: dbStory.birthWeight ? dbStory.birthWeight : undefined,
+                      height: dbStory.height ? dbStory.height : undefined,
+                      first_cry_time: dbStory.firstCryTime,
+                      latitude: dbStory.latitude,
+                      longitude: dbStory.longitude,
+                      hospital: dbStory.hospital,
+                      mother_name: dbStory.motherName,
+                      father_name: dbStory.fatherName,
+                      maternal_grandmother: dbStory.maternalGrandmother,
+                      maternal_grandfather: dbStory.maternalGrandfather,
+                      paternal_grandmother: dbStory.paternalGrandmother,
+                      paternal_grandfather: dbStory.paternalGrandfather,
+                      other_family: dbStory.otherFamily,
+                      room_type: dbStory.roomType,
+                      checkin_date: dbStory.checkInDate || undefined,
+                      checkin_time: dbStory.checkInTime,
+                      doctor_names: dbStory.doctors,
+                      nurse_names: dbStory.nurse,
+                      baby_first_outfit: dbStory.firstOutfit,
+                      mother_outfit: dbStory.motherOutfit,
+                      first_feed: dbStory.firstCryTime,
+                      status: "Rejected" as const,
+                      photo_url: dbStory.photo_url || null,
+                      latest_pdf_url: dbStory.latest_pdf_url || null,
+                      rejection_reason: rejectionReason,
+                    };
+                    if (form.id) {
+                      (dbData as any).id = form.id;
+                    }
+                    const { saveStory } = await import("@/services/stories");
+                    await saveStory(dbData);
+                    
+                    setShowRejectModal(false);
+                    setToast({ message: "Keepsake rejected and sent back for corrections.", type: "info" });
+                    setTimeout(() => router.push("/dashboard"), 1500);
+                  } catch (err: any) {
+                    setToast({ message: "Failed to reject: " + err.message, type: "error" });
+                  } finally {
+                    setSubmittingAction(false);
+                  }
+                }}
+                disabled={submittingAction}
+                className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white font-semibold rounded-lg py-2 text-xs transition-colors cursor-pointer"
+              >
+                {submittingAction ? "Submitting..." : "Confirm Reject"}
+              </button>
+              <button
+                onClick={() => setShowRejectModal(false)}
+                disabled={submittingAction}
+                className="flex-1 border border-gray-200 text-gray-500 hover:bg-gray-50 rounded-lg py-2 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
+
     </div>
   );
 }

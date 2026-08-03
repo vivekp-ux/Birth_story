@@ -37,7 +37,11 @@ export interface Story {
   // Assets & status
   photo_url: string | null;
   latest_pdf_url: string | null;
-  status: "Draft" | "Completed" | "Archived";
+  status: "Draft" | "Pending Approval" | "Approved" | "Rejected" | "Completed" | "Archived";
+  rejection_reason?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  submitted_at?: string | null;
 
   // Metadata
   created_by?: string;
@@ -57,6 +61,7 @@ export interface UserProfile {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "STAFF";
+  role: "ADMIN" | "STAFF" | "APPROVER";
+  assigned_centre?: string | null;
   created_at: string;
 }
