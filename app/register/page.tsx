@@ -81,24 +81,27 @@ export default function RegisterPage() {
         signUpData.assigned_centre = form.assigned_centre;
       }
 
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-          data: signUpData,
-        },
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.email,
+          password: form.password,
+          ...signUpData,
+        }),
       });
 
-      if (signUpError) { setError(signUpError.message); setLoading(false); return; }
+      const data = await response.json();
 
-      if (data.session) {
-        router.push("/dashboard");
-      } else {
-        setSuccess("Account created! Check your email for a confirmation link, then sign in.");
-        setLoading(false);
-        setTimeout(() => router.push("/login"), 4000);
+      if (!response.ok) { 
+        setError(data.error || "An error occurred during registration."); 
+        setLoading(false); 
+        return; 
       }
+
+      setSuccess("Account created successfully!");
+      setLoading(false);
+      setTimeout(() => router.push("/dashboard"), 2000);
     } catch (err: any) {
       setError(err?.message || "An error occurred during registration.");
       setLoading(false);
