@@ -188,3 +188,13 @@ CREATE INDEX IF NOT EXISTS idx_pdf_versions_story_id ON public.pdf_versions (sto
 -- authenticated uploads to these buckets. E.g., select "Insert" and "Update" 
 -- for Authenticated Users on "bucket_id = 'baby-images'" and "bucket_id = 'pdfs'".
 -- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 7. EXPLICIT GRANTS (For when "Automatically expose new tables" is OFF)
+-- ---------------------------------------------------------------------
+-- These grant the Data API roles access to the tables.
+-- The RLS policies created above will still strictly control WHAT rows they can see/edit.
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT ALL ON TABLE public.users TO anon, authenticated;
+GRANT ALL ON TABLE public.stories TO anon, authenticated;
+GRANT ALL ON TABLE public.pdf_versions TO anon, authenticated;

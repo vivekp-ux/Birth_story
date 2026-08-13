@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { Story, UserProfile, PdfVersion } from "@/types/story";
 import { fetchStories, getCurrentUserProfile, fetchPdfVersions, fetchStoryStats } from "@/services/stories";
 import Toast from "@/components/Toast";
+import * as XLSX from "xlsx";
 
 type StatusFilter = "All" | "Draft" | "Pending Approval" | "Approved" | "Rejected" | "Completed" | "Archived";
 
@@ -268,7 +269,7 @@ function DashboardContent() {
     }
   };
 
-  const handleExportCSV = async () => {
+  const handleExportExcel = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -308,23 +309,13 @@ function DashboardContent() {
         s.approved_at || ""
       ]);
 
-      // Simple CSV escaping and conversion
-      const csvContent = "\uFEFF" + [
-        headers.join(","),
-        ...rows.map(row => row.map(val => {
-          const str = String(val ?? "");
-          return `"${str.replace(/"/g, '""')}"`;
-        }).join(","))
-      ].join("\r\n");
+      const worksheetData = [headers, ...rows];
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Birth Stories");
+      
+      XLSX.writeFile(workbook, `birth_stories_${selectedBranch.toLowerCase().replace(/\s+/g, "_")}.xlsx`);
 
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `birth_stories_${selectedBranch.toLowerCase().replace(/\s+/g, "_")}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
       setToast({ message: "Export completed successfully!", type: "success" });
     } catch (err) {
       console.error("Export error:", err);
@@ -528,7 +519,7 @@ function DashboardContent() {
 
             {isAdmin && (
               <button
-                onClick={handleExportCSV}
+                onClick={handleExportExcel}
                 className="border border-emerald-300 text-emerald-600 hover:bg-emerald-50 text-sm font-semibold rounded-xl px-4 py-2.5 flex items-center justify-center gap-2 transition-all whitespace-nowrap cursor-pointer"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-4 h-4">

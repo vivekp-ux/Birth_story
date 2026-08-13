@@ -248,6 +248,21 @@ export function StoryProvider({ children }: { children: ReactNode }) {
       } else if (status === "Approved") {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
+          // Self-heal: Ensure the user exists in public.users to prevent FK violations
+          // This is necessary if the database was recreated and auth.users weren't fully synced
+          try {
+            await supabase.from("users").upsert({
+              id: user.id,
+              name: user.user_metadata?.name || "Keepsake Staff",
+              email: user.email,
+              role: user.user_metadata?.role || "STAFF",
+              assigned_centre: user.user_metadata?.assigned_centre || null,
+              branch_id: user.user_metadata?.branch_id || null
+            }, { onConflict: "id" });
+          } catch (e) {
+            console.warn("Self-heal upsert failed", e);
+          }
+
           extra.approved_by = user.id;
           extra.approved_at = nowStr;
         }
