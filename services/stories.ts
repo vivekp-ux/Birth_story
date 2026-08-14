@@ -11,14 +11,7 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
     .eq("id", user.id)
     .maybeSingle();
 
-  // 🔍 DEBUG — open browser console to see this
-  console.log("[getUserProfile] auth user id:", user.id);
-  console.log("[getUserProfile] auth user email:", user.email);
-  console.log("[getUserProfile] DB row:", data);
-  console.log("[getUserProfile] DB error:", error);
-
   if (error) {
-    console.warn("[getUserProfile] DB query failed — falling back to auth metadata (role may be wrong)");
     return {
       id: user.id,
       email: user.email || "",
@@ -29,7 +22,6 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
   }
 
   if (!data) {
-    console.warn("[getUserProfile] No row found in public.users for this user — falling back to auth metadata");
     return {
       id: user.id,
       email: user.email || "",

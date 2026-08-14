@@ -190,11 +190,20 @@ CREATE INDEX IF NOT EXISTS idx_pdf_versions_story_id ON public.pdf_versions (sto
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
--- 7. EXPLICIT GRANTS (For when "Automatically expose new tables" is OFF)
+-- 7. EXPLICIT GRANTS (Least-Privilege Security Model)
 -- ---------------------------------------------------------------------
--- These grant the Data API roles access to the tables.
--- The RLS policies created above will still strictly control WHAT rows they can see/edit.
-GRANT USAGE ON SCHEMA public TO anon, authenticated;
-GRANT ALL ON TABLE public.users TO anon, authenticated;
-GRANT ALL ON TABLE public.stories TO anon, authenticated;
-GRANT ALL ON TABLE public.pdf_versions TO anon, authenticated;
+-- In Supabase projects where "Automatically expose new tables" is OFF,
+-- explicit grants allow the Data API & server backend to communicate with tables.
+-- Note: All tables use UUID primary keys (gen_random_uuid()), so sequence grants are not required.
+
+-- A. Backend Server Operations (Bypasses RLS with strict server-side validation)
+GRANT USAGE ON SCHEMA public TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.users, public.stories, public.pdf_versions TO service_role;
+
+-- B. Authenticated App Users (Subject to RLS policies)
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT SELECT, UPDATE ON TABLE public.users TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.stories, public.pdf_versions TO authenticated;
+
+-- C. Anonymous / Public Access (Restricted)
+GRANT USAGE ON SCHEMA public TO anon;

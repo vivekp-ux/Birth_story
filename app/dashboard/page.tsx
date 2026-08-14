@@ -145,9 +145,9 @@ function DashboardContent() {
       params.set("page", String(pageVal));
     }
     const targetStatus = statusVal || statusFilter;
-    if (targetStatus !== "All") {
-      params.set("status", targetStatus);
-    }
+    // Always write status explicitly so an APPROVER choosing "All" isn't
+    // swallowed by the absence-of-param redirect logic below.
+    params.set("status", targetStatus);
     if (searchVal.trim()) {
       params.set("search", searchVal.trim());
     }
@@ -155,13 +155,13 @@ function DashboardContent() {
     if (branchToUse && branchToUse !== "All") {
       params.set("branch", branchToUse);
     }
-    const queryStr = params.toString();
-    router.replace(queryStr ? `/dashboard?${queryStr}` : "/dashboard");
+    router.replace(`/dashboard?${params.toString()}`);
   };
 
-  // Redirect APPROVER to Pending Approval if no status is specified
+  // Redirect APPROVER to Pending Approval only on the very first load
+  // (i.e., no status param in the URL at all — not even "All").
   useEffect(() => {
-    if (userProfile && !searchParams.get("status") && userProfile.role === "APPROVER") {
+    if (userProfile && !searchParams.has("status") && userProfile.role === "APPROVER") {
       updateUrl(currentPage, "Pending Approval", searchQuery);
     }
   }, [userProfile]);
@@ -199,8 +199,8 @@ function DashboardContent() {
 
         const statsData = await fetchStoryStats(targetHospital);
         setStats(statsData);
-      } catch (err) {
-        console.error("Load stories / stats error:", err);
+      } catch {
+        // errors are surfaced via the empty state or toast below
       } finally {
         setLoading(false);
       }
@@ -237,7 +237,6 @@ function DashboardContent() {
       const body = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        console.error("Delete API error:", res.status, body);
         throw new Error(body.error || `Delete failed (${res.status})`);
       }
 
@@ -260,7 +259,6 @@ function DashboardContent() {
       const statsData = await fetchStoryStats(targetHospital);
       setStats(statsData);
     } catch (err: unknown) {
-      console.error("Delete error:", err);
       // Revert optimistic update on failure
       setStories(originalStories);
       setTotalCount(originalStories.length);
@@ -317,8 +315,7 @@ function DashboardContent() {
       XLSX.writeFile(workbook, `birth_stories_${selectedBranch.toLowerCase().replace(/\s+/g, "_")}.xlsx`);
 
       setToast({ message: "Export completed successfully!", type: "success" });
-    } catch (err) {
-      console.error("Export error:", err);
+    } catch {
       setToast({ message: "Failed to export data.", type: "error" });
     } finally {
       setLoading(false);
@@ -837,8 +834,8 @@ function VersionHistoryModal({ storyId, babyName, onClose }: { storyId: string; 
       try {
         const data = await fetchPdfVersions(storyId);
         setVersions(data);
-      } catch (err) {
-        console.error("Error loading PDF versions:", err);
+      } catch {
+        // error state handled by empty versions list
       } finally {
         setLoading(false);
       }

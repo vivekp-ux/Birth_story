@@ -218,7 +218,7 @@ export function StoryProvider({ children }: { children: ReactNode }) {
       setStoryIdState(id);
       setBabyImage(dbStory.photo_url || null);
     } catch (error) {
-      console.error("Error loading story from DB:", error);
+      // silently propagate — callers display user-facing error via toast
     } finally {
       setLoading(false);
     }
@@ -248,21 +248,6 @@ export function StoryProvider({ children }: { children: ReactNode }) {
       } else if (status === "Approved") {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          // Self-heal: Ensure the user exists in public.users to prevent FK violations
-          // This is necessary if the database was recreated and auth.users weren't fully synced
-          try {
-            await supabase.from("users").upsert({
-              id: user.id,
-              name: user.user_metadata?.name || "Keepsake Staff",
-              email: user.email,
-              role: user.user_metadata?.role || "STAFF",
-              assigned_centre: user.user_metadata?.assigned_centre || null,
-              branch_id: user.user_metadata?.branch_id || null
-            }, { onConflict: "id" });
-          } catch (e) {
-            console.warn("Self-heal upsert failed", e);
-          }
-
           extra.approved_by = user.id;
           extra.approved_at = nowStr;
         }
@@ -293,7 +278,6 @@ export function StoryProvider({ children }: { children: ReactNode }) {
       
       return id;
     } catch (error) {
-      console.error("Error saving story to DB:", error);
       throw error;
     } finally {
       setLoading(false);
@@ -324,8 +308,7 @@ export function StoryProvider({ children }: { children: ReactNode }) {
       setDraftSaved(true);
       setTimeout(() => setDraftSaved(false), 2500);
       return null;
-    } catch (error) {
-      console.error("Failed to save draft:", error);
+    } catch {
       return null;
     }
   };

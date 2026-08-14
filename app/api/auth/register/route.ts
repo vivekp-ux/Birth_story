@@ -29,6 +29,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
+    if (data.user) {
+      // Explicitly guarantee the public.users record is created with the chosen role
+      const { error: profileError } = await supabaseAdmin.from("users").upsert(
+        {
+          id: data.user.id,
+          name: name || "User",
+          email: email,
+          role: role || "STAFF",
+          assigned_centre: assigned_centre || null,
+        },
+        { onConflict: "id" }
+      );
+
+      if (profileError) {
+        console.error("Failed to upsert user profile:", profileError.message);
+      }
+    }
+
     return NextResponse.json({ success: true, user: data.user });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
