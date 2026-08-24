@@ -98,43 +98,32 @@ export async function fetchStories(options?: {
 }
 
 export async function fetchStoryStats(hospital?: string) {
-  let qTotal = supabase.from("stories").select("*", { count: "exact", head: true });
-  let qDraft = supabase.from("stories").select("*", { count: "exact", head: true }).eq("status", "Draft");
-  let qPending = supabase.from("stories").select("*", { count: "exact", head: true }).eq("status", "Pending Approval");
-  let qApproved = supabase.from("stories").select("*", { count: "exact", head: true }).eq("status", "Approved");
-  let qRejected = supabase.from("stories").select("*", { count: "exact", head: true }).eq("status", "Rejected");
-  let qCompleted = supabase.from("stories").select("*", { count: "exact", head: true }).eq("status", "Completed");
+  // Use a single GET query (fetching only the status column) instead of 6 parallel
+  // HEAD requests — Supabase can return 502 for HEAD requests in some configurations.
+  let query = supabase.from("stories").select("status");
 
   if (hospital) {
-    qTotal = qTotal.eq("hospital", hospital);
-    qDraft = qDraft.eq("hospital", hospital);
-    qPending = qPending.eq("hospital", hospital);
-    qApproved = qApproved.eq("hospital", hospital);
-    qRejected = qRejected.eq("hospital", hospital);
-    qCompleted = qCompleted.eq("hospital", hospital);
+    query = query.eq("hospital", hospital);
   }
 
-  const [
-    { count: total, error: err1 },
-    { count: draft, error: err2 },
-    { count: pending, error: err3 },
-    { count: approved, error: err4 },
-    { count: rejected, error: err5 },
-    { count: completed, error: err6 },
-  ] = await Promise.all([qTotal, qDraft, qPending, qApproved, qRejected, qCompleted]);
+  const { data, error } = await query;
+  if (error) throw error;
 
-  if (err1 || err2 || err3 || err4 || err5 || err6) {
-    throw err1 || err2 || err3 || err4 || err5 || err6;
+  const rows = (data ?? []) as { status: string }[];
+
+  const counts = { total: 0, draft: 0, pending: 0, approved: 0, rejected: 0, completed: 0 };
+  for (const row of rows) {
+    counts.total++;
+    switch (row.status) {
+      case "Draft":            counts.draft++;     break;
+      case "Pending Approval": counts.pending++;   break;
+      case "Approved":         counts.approved++;  break;
+      case "Rejected":         counts.rejected++;  break;
+      case "Completed":        counts.completed++; break;
+    }
   }
 
-  return {
-    total: total ?? 0,
-    draft: draft ?? 0,
-    pending: pending ?? 0,
-    approved: approved ?? 0,
-    rejected: rejected ?? 0,
-    completed: completed ?? 0,
-  };
+  return counts;
 }
 
 export async function fetchStoryById(id: string) {

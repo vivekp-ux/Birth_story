@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStory } from "@/context/StoryContext";
 import { getCurrentUserProfile } from "@/services/stories";
+import { recordStoryAudit } from "@/services/activityLogs";
 import { UserProfile } from "@/types/story";
 import Toast from "@/components/Toast";
 
@@ -125,7 +126,16 @@ function VerificationPageContent() {
                         onClick={async () => {
                           setSubmittingAction(true);
                           try {
-                            await saveStoryToDb("Approved");
+                            const savedId = await saveStoryToDb("Approved");
+                            recordStoryAudit({
+                              action: "STORY_APPROVED",
+                              storyId: savedId || form.id,
+                              details: {
+                                baby_name: form.babyName,
+                                mother_name: form.motherName,
+                                hospital: form.hospital,
+                              },
+                            });
                             setToast({ message: "Keepsake approved successfully!", type: "success" });
                             setTimeout(() => router.push("/dashboard"), 1500);
                           } catch (err: any) {
@@ -212,7 +222,16 @@ function VerificationPageContent() {
                           onClick={async () => {
                             setSubmittingAction(true);
                             try {
-                              await saveStoryToDb("Pending Approval");
+                              const savedId = await saveStoryToDb("Pending Approval");
+                              recordStoryAudit({
+                                action: "STORY_SUBMITTED",
+                                storyId: savedId || form.id,
+                                details: {
+                                  baby_name: form.babyName,
+                                  mother_name: form.motherName,
+                                  hospital: form.hospital,
+                                },
+                              });
                               setToast({ message: "Story submitted for approval!", type: "success" });
                               setTimeout(() => router.push("/dashboard"), 1500);
                             } catch (err: any) {
@@ -342,6 +361,17 @@ function VerificationPageContent() {
                     }
                     const { saveStory } = await import("@/services/stories");
                     await saveStory(dbData);
+
+                    recordStoryAudit({
+                      action: "STORY_REJECTED",
+                      storyId: form.id,
+                      details: {
+                        baby_name: dbStory.babyName,
+                        mother_name: dbStory.motherName,
+                        hospital: dbStory.hospital,
+                        reason: rejectionReason,
+                      },
+                    });
                     
                     setShowRejectModal(false);
                     setToast({ message: "Keepsake rejected and sent back for corrections.", type: "info" });

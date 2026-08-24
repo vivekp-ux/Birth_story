@@ -7,6 +7,7 @@ import { useStory, StoryForm } from "@/context/StoryContext";
 import { useReactToPrint } from "react-to-print";
 import { jsPDF } from "jspdf";
 import { uploadPdf, getCurrentUserProfile } from "@/services/stories";
+import { recordStoryAudit } from "@/services/activityLogs";
 import Toast from "@/components/Toast";
 
 // Formats "2026-05-09" → "9th May 2026"
@@ -520,6 +521,16 @@ function PdfPreviewPageContent() {
       setStatusMessage("Uploading PDF version to Supabase...");
       // Upload PDF to Supabase Storage and register the version
       const publicUrl = await uploadPdf(form.id, pdfBlob);
+
+      recordStoryAudit({
+        action: "PDF_GENERATED",
+        storyId: form.id,
+        details: {
+          baby_name: form.babyName,
+          mother_name: form.motherName,
+          hospital: form.hospital,
+        },
+      });
 
       setStatusMessage("Downloading file...");
       // Trigger download on client

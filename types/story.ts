@@ -65,3 +65,16 @@ export interface UserProfile {
   assigned_centre?: string | null;
   created_at: string;
 }
+
+export interface ActivityLog {
+  id: string;
+  user_id?: string | null;
+  user_name: string;
+  user_role: string;
+  action: string;
+  entity_type: "STORY" | "USER" | "AUTH";
+  entity_id?: string | null;
+  details?: Record<string, any>;
+  created_at: string;
+}
+

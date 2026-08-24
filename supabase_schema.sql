@@ -190,7 +190,36 @@ CREATE INDEX IF NOT EXISTS idx_pdf_versions_story_id ON public.pdf_versions (sto
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
--- 7. EXPLICIT GRANTS (Least-Privilege Security Model)
+-- 7. ACTIVITY & AUDIT LOGS TABLE
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.activity_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    user_name TEXT NOT NULL,
+    user_role TEXT NOT NULL,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL CHECK (entity_type IN ('STORY', 'USER', 'AUTH')),
+    entity_id TEXT,
+    details JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON public.activity_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_action ON public.activity_logs (action);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON public.activity_logs (user_id);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_entity_type ON public.activity_logs (entity_type);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_entity_id ON public.activity_logs (entity_id);
+
+ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow select activity_logs for authenticated users" ON public.activity_logs;
+CREATE POLICY "Allow select activity_logs for authenticated users" 
+    ON public.activity_logs FOR SELECT 
+    TO authenticated 
+    USING (true);
+
+-- ---------------------------------------------------------------------
+-- 8. EXPLICIT GRANTS (Least-Privilege Security Model)
 -- ---------------------------------------------------------------------
 -- In Supabase projects where "Automatically expose new tables" is OFF,
 -- explicit grants allow the Data API & server backend to communicate with tables.
@@ -198,12 +227,14 @@ CREATE INDEX IF NOT EXISTS idx_pdf_versions_story_id ON public.pdf_versions (sto
 
 -- A. Backend Server Operations (Bypasses RLS with strict server-side validation)
 GRANT USAGE ON SCHEMA public TO service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.users, public.stories, public.pdf_versions TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.users, public.stories, public.pdf_versions, public.activity_logs TO service_role;
 
 -- B. Authenticated App Users (Subject to RLS policies)
 GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT SELECT, UPDATE ON TABLE public.users TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.stories, public.pdf_versions TO authenticated;
+GRANT SELECT ON TABLE public.activity_logs TO authenticated;
 
 -- C. Anonymous / Public Access (Restricted)
 GRANT USAGE ON SCHEMA public TO anon;
+

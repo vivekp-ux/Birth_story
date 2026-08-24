@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createServerAuditLog } from "@/lib/audit";
 
 /**
- * Delete Story API Route — server-side only, ADMIN-gated.
- *
- * Strict Server-Side Authority Workflow:
- *   1. Verify JWT via adminClient.auth.getUser(token).
- *   2. Read user role strictly from server-side `public.users` table using service-role client.
- *   3. Require profile.role === "ADMIN" (rejects client-side / user_metadata spoofing).
- *   4. Use service-role client to delete:
- *        a. `pdf_versions` (cascade child records)
- *        b. `stories` (main birth story record)
- *   5. Return success JSON.
+ * Delete Story API Route — server-side only, ADMIN-gated with immutable audit trail.
  */
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -51,7 +43,7 @@ export async function DELETE(req: NextRequest) {
   // ── Step 3: Read user role strictly from public.users table ─────────────────
   const { data: profile, error: profileError } = await adminClient
     .from("users")
-    .select("role")
+    .select("name, role")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -76,7 +68,18 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
-  // ── Step 4: Delete pdf_versions & stories via service-role client ────────────
+  // ── Step 4: Fetch story metadata before deletion for the audit trail ─────────
+  const { data: storyData } = await adminClient
+    .from("stories")
+    .select("baby_name, mother_name, hospital, status")
+    .eq("id", id)
+    .maybeSingle();
+
+  const babyName = storyData?.baby_name || "Unknown";
+  const hospital = storyData?.hospital || "Unknown";
+  const motherName = storyData?.mother_name || "Unknown";
+
+  // ── Step 5: Delete pdf_versions & stories via service-role client ────────────
   const { error: pdfDeleteError } = await adminClient
     .from("pdf_versions")
     .delete()
@@ -101,6 +104,22 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
-  // ── Step 5: Return success ──────────────────────────────────────────────────
+  // ── Step 6: Server-side audit log ───────────────────────────────────────────
+  await createServerAuditLog({
+    supabaseAdmin: adminClient,
+    userId: user.id,
+    userName: profile.name || "Admin",
+    userRole: profile.role,
+    action: "STORY_DELETED",
+    entityType: "STORY",
+    entityId: id,
+    details: {
+      baby_name: babyName,
+      mother_name: motherName,
+      hospital: hospital,
+      previous_status: storyData?.status || "Unknown",
+    },
+  });
+
   return NextResponse.json({ success: true, message: "Story deleted successfully" });
 }

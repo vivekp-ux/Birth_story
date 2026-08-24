@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStory } from "@/context/StoryContext";
 import { getCurrentUserProfile } from "@/services/stories";
+import { recordStoryAudit } from "@/services/activityLogs";
 import Toast from "@/components/Toast";
 
 const toTitleCase = (str: string) => {
@@ -248,8 +249,19 @@ function CreateStoryContent() {
 
   const handleSaveDraft = async () => {
     const id = await saveDraft();
-    if (id && !idParam) {
-      router.push(`/create-story?id=${id}`);
+    if (id) {
+      recordStoryAudit({
+        action: idParam ? "STORY_UPDATED" : "STORY_CREATED",
+        storyId: id,
+        details: {
+          baby_name: form.babyName,
+          mother_name: form.motherName,
+          hospital: form.hospital,
+        },
+      });
+      if (!idParam) {
+        router.push(`/create-story?id=${id}`);
+      }
     }
   };
 
@@ -261,6 +273,15 @@ function CreateStoryContent() {
     }
     try {
       const savedId = await saveStoryToDb("Pending Approval");
+      recordStoryAudit({
+        action: "STORY_SUBMITTED",
+        storyId: savedId,
+        details: {
+          baby_name: form.babyName,
+          mother_name: form.motherName,
+          hospital: form.hospital,
+        },
+      });
       setToast({ message: "Story submitted for approval!", type: "success" });
       setTimeout(() => router.push("/dashboard"), 1500);
     } catch (err: any) {

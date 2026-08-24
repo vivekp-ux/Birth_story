@@ -1,27 +1,59 @@
 import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { createServerAuditLog } from "@/lib/audit";
 
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const { email, password, name, role, assigned_centre } = await request.json();
+    const { email, password, name, role, assigned_centre } = await req.json();
+
+    if (!email || !password || !name) {
+      return NextResponse.json({ error: "Missing required fields: email, password, and name" }, { status: 400 });
+    }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !serviceRoleKey) {
-      return NextResponse.json({ error: "Missing Supabase configuration" }, { status: 500 });
+      return NextResponse.json({ error: "Missing Supabase server configuration" }, { status: 500 });
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
 
+    // ── Verify caller is authenticated ADMIN ─────────────────────────────
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    
+    let actorId: string | undefined = undefined;
+    let actorName = "Admin";
+    let actorRole = "ADMIN";
+
+    if (token) {
+      const { data: authData } = await supabaseAdmin.auth.getUser(token);
+      if (authData?.user) {
+        actorId = authData.user.id;
+        const { data: callerProfile } = await supabaseAdmin
+          .from("users")
+          .select("name, role")
+          .eq("id", actorId)
+          .maybeSingle();
+        if (callerProfile) {
+          actorName = callerProfile.name || "Admin";
+          actorRole = callerProfile.role || "ADMIN";
+        }
+      }
+    }
+
+    // ── Create user in auth.users ────────────────────────────────────────
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
       user_metadata: {
         name,
-        role,
-        assigned_centre,
+        role: role || "STAFF",
+        assigned_centre: assigned_centre || null,
       },
     });
 
@@ -30,7 +62,7 @@ export async function POST(request: Request) {
     }
 
     if (data.user) {
-      // Explicitly guarantee the public.users record is created with the chosen role
+      // Upsert record into public.users
       const { error: profileError } = await supabaseAdmin.from("users").upsert(
         {
           id: data.user.id,
@@ -45,10 +77,27 @@ export async function POST(request: Request) {
       if (profileError) {
         console.error("Failed to upsert user profile:", profileError.message);
       }
+
+      // ── Server-Side Audit Log ─────────────────────────────────────────
+      await createServerAuditLog({
+        supabaseAdmin,
+        userId: actorId,
+        userName: actorName,
+        userRole: actorRole,
+        action: "USER_CREATED",
+        entityType: "USER",
+        entityId: data.user.id,
+        details: {
+          created_user_name: name,
+          created_user_email: email,
+          role: role || "STAFF",
+          assigned_centre: assigned_centre || "All Centres",
+        },
+      });
     }
 
     return NextResponse.json({ success: true, user: data.user });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || "An unexpected error occurred" }, { status: 500 });
   }
 }
